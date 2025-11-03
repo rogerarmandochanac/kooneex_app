@@ -1,0 +1,152 @@
+ScreenManager:
+    LoginScreen:
+    ViajeScreen:
+    PendientesScreen:
+    TarifaScreen:
+
+<LoginScreen>:
+    name: "login"
+    username: username.text
+    password: password.text
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 20
+        spacing: 10
+
+        Label:
+            text: "Iniciar Sesión"
+            font_size: 24
+
+        TextInput:
+            id: username
+            hint_text: "Usuario"
+
+        TextInput:
+            id: password
+            hint_text: "Contraseña"
+            password: True
+
+        Button:
+            text: "Ingresar"
+            on_release: root.login()
+
+        Label:
+            text: root.mensaje
+            color: 1,0,0,1
+
+
+<ViajeScreen>:
+    name: "viaje"
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 10
+        spacing: 10
+
+        Label:
+            text: "Solicitar Viaje"
+            font_size: 22
+
+        TextInput:
+            id: origen_lat
+            hint_text: "Latitud de origen"
+            input_filter: "float"
+
+        TextInput:
+            id: origen_lon
+            hint_text: "Longitud de origen"
+            input_filter: "float"
+
+        TextInput:
+            id: destino_lat
+            hint_text: "Latitud de destino"
+            input_filter: "float"
+
+        TextInput:
+            id: destino_lon
+            hint_text: "Longitud de destino"
+            input_filter: "float"
+        
+        TextInput:
+            id: cantidad_pasajeros
+            hint_text: "Cantidad de pasajeros"
+            input_filter: "int"
+
+        Button:
+            text: "Solicitar viaje"
+            on_release:
+                root.solicitar_viaje(origen_lat.text, origen_lon.text, destino_lat.text, destino_lon.text, cantidad_pasajeros.text)
+
+        Label:
+            id: mensaje_label
+            text: ""
+            color: 1, 1, 1, 1
+            size_hint_y: None
+            height: 80
+            text_size: self.size
+            halign: "center"
+            valign: "middle"
+
+
+        TextInput:
+            id: viaje_id_consulta
+            hint_text: "ID de viaje para consultar estado"
+            input_filter: "int"
+
+        Button:
+            text: "Consultar estado"
+            on_release: root.actualizar_estado_viaje(viaje_id_consulta.text)
+
+<PendientesScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: 10
+        spacing: 10
+
+        Label:
+            text: "🚖 Viajes Pendientes"
+            font_size: 22
+            bold: True
+            size_hint_y: None
+            height: 40
+            color: 1, 1, 0, 1
+
+        ScrollView:
+            do_scroll_x: False
+            do_scroll_y: True
+            GridLayout:
+                id: viajes_container
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 10
+<TarifaScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: 10
+        spacing: 10
+
+        Label:
+            text: "💰 Ofertas de Mototaxistas"
+            font_size: 22
+            bold: True
+            size_hint_y: None
+            height: 40
+            color: 1, 1, 0, 1
+
+        ScrollView:
+            do_scroll_x: False
+            do_scroll_y: True
+
+            GridLayout:
+                id: tarifas_container
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 10
+
+        Label:
+            id: mensaje_tarifas
+            text: ""
+            size_hint_y: None
+            height: 30
+            color: 0, 1, 0, 1
