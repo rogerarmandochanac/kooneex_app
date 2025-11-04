@@ -45,6 +45,7 @@ class Viaje(models.Model):
         ('negociando', 'negociando'),
         ('aceptado', 'Aceptado'),
         ('en_curso', 'En curso'),
+        ('completado_pasajero', 'Completado'),
         ('completado', 'Completado'),
         ('rechazado', 'Rechazado'),
     ]

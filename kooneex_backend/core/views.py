@@ -180,16 +180,21 @@ class ViajeViewSet(viewsets.ModelViewSet):
         viaje = self.get_object()
         user = request.user
 
-        if user.rol != "mototaxista":
-            return Response({"error": "Solo los mototaxistas pueden completar viajes."}, status=status.HTTP_403_FORBIDDEN)
+        # if user.rol != "mototaxista":
+        #     return Response({"error": "Solo los mototaxistas pueden completar viajes."}, status=status.HTTP_403_FORBIDDEN)
 
-        if viaje.mototaxista != user:
-            return Response({"error": "Este viaje no está asignado a ti."}, status=status.HTTP_403_FORBIDDEN)
+        # if viaje.mototaxista != user:
+        #     return Response({"error": "Este viaje no está asignado a ti."}, status=status.HTTP_403_FORBIDDEN)
 
         if viaje.estado != "en_curso" and viaje.estado != "aceptado":
             return Response({"error": "Solo se pueden completar viajes en curso o aceptados."}, status=status.HTTP_400_BAD_REQUEST)
 
-        viaje.estado = "completado"
+        if user.rol == 'pasajero':
+            viaje.estado = "completado_pasajero"
+        
+        if user.rol == 'mototaxista':
+            viaje.estado = 'completado'
+
         viaje.save()
 
         return Response({"mensaje": f"Viaje #{viaje.id} completado correctamente."}, status=status.HTTP_200_OK)
