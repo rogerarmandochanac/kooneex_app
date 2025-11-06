@@ -1,10 +1,22 @@
 from rest_framework import serializers
-from .models import Usuario, Mototaxi, Viaje, Pago
+from .models import (Usuario, 
+                     Mototaxi, 
+                     Viaje, 
+                     Pago, 
+                     Oferta
+                     )
 
 class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario
-        fields = ['id', 'username', 'first_name', 'last_name', 'rol', 'telefono', 'direccion']
+        fields = ['id', 
+                  'username', 
+                  'first_name', 
+                  'last_name', 
+                  'rol', 
+                  'telefono', 
+                  'direccion'
+                  ]
 
 
 class MototaxiSerializer(serializers.ModelSerializer):
@@ -13,28 +25,52 @@ class MototaxiSerializer(serializers.ModelSerializer):
     class Meta:
         model = Mototaxi
         fields = [
-            'id', 'conductor', 'placa', 'modelo', 'capacidad',
-            'disponible', 'latitud', 'longitud'
+            'id', 
+            'conductor', 
+            'placa', 
+            'modelo', 
+            'capacidad',
+            'disponible', 
+            'latitud', 
+            'longitud'
         ]
 
 
+class OfertaSerializer(serializers.ModelSerializer):
+    mototaxista_nombre = serializers.SerializerMethodField()
+
+    def get_mototaxista_nombre(self, obj):
+        if obj.mototaxista:
+            nombre = f"{obj.mototaxista.first_name} {obj.mototaxista.last_name}".strip()
+            return nombre or obj.mototaxista.username
+        return None
+
+    class Meta:
+        model = Oferta
+        fields = '__all__'
+
+
 class ViajeSerializer(serializers.ModelSerializer):
+    ofertas = OfertaSerializer(many=True, read_only=True)
     pasajero = UsuarioSerializer(read_only=True)
-    mototaxi = MototaxiSerializer(read_only=True)
+    mototaxista = UsuarioSerializer(read_only=True)
 
     class Meta:
         model = Viaje
         fields = '__all__'
         read_only_fields = ['pasajero']
-    
+        depth = 1
+
     def validate(self, data):
         user = self.context['request'].user
         if user.rol == 'pasajero':
-            activo = Viaje.objects.filter(pasajero=user, estado__in=['pendiente', 'aceptado']).exists()
+            activo = Viaje.objects.filter(
+                pasajero=user,
+                estado__in=['pendiente', 'aceptado', 'negociando']
+            ).exists()
             if activo:
                 raise serializers.ValidationError("Ya tienes un viaje activo o pendiente.")
         return data
-
 
 
 class PagoSerializer(serializers.ModelSerializer):
@@ -42,4 +78,9 @@ class PagoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Pago
-        fields = ['id', 'viaje', 'monto', 'metodo', 'fecha']
+        fields = ['id', 
+                  'viaje', 
+                  'monto', 
+                  'metodo', 
+                  'fecha']
+

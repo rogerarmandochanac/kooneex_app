@@ -1,25 +1,30 @@
-from rest_framework import viewsets, permissions
-from .models import Usuario, Mototaxi, Viaje, Pago
-from .serializers import UsuarioSerializer, MototaxiSerializer, ViajeSerializer, PagoSerializer
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .permissions import IsAdmin, IsMototaxista, IsPasajero
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework import status
-from math import radians, cos, sin, asin, sqrt
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
+from .utils import calcular_distancia
+from .serializers import (UsuarioSerializer, 
+                          MototaxiSerializer, 
+                          ViajeSerializer, 
+                          PagoSerializer, 
+                          OfertaSerializer
+                        )
+from .permissions import IsAdmin
+from .models import (Usuario, 
+                     Mototaxi, 
+                     Viaje, 
+                     Pago, 
+                     Oferta
+                     )
 
-def calcular_distancia(lat1, lon1, lat2, lon2):
-    """Calcula la distancia entre dos coordenadas (en kilómetros)."""
-    R = 6371  # radio de la Tierra en km
-    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = sin(dlat/2)**2 + cos(lat1)*cos(lat2)*sin(dlon/2)**2
-    c = 2 * asin(sqrt(a))
-    return R * c
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+from rest_framework.permissions import (IsAuthenticated, 
+                                        AllowAny)
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.views import APIView
+from rest_framework import (viewsets, 
+                            permissions,
+                            status,
+                            serializers)
 
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
@@ -91,6 +96,65 @@ class MototaxiViewSet(viewsets.ModelViewSet):
                 cercanos.append(data)
 
         return Response(cercanos)
+
+class OfertaViewSet(viewsets.ModelViewSet):
+    queryset = Oferta.objects.all()
+    serializer_class = OfertaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        """Permite que varios mototaxistas ofrezcan tarifas a un mismo viaje."""
+        user = self.request.user
+        if user.rol != 'mototaxista':
+            raise PermissionError('Solo los mototaxistas pueden ofrecer tarifas.')
+
+        viaje_id = self.request.data.get('viaje')
+        monto = self.request.data.get('monto')
+        tiempo_estimado = self.request.data.get('tiempo_estimado')
+
+        if not viaje_id or not monto:
+            raise ValueError('Debe indicar el viaje y el monto.')
+
+        viaje = Viaje.objects.get(pk=viaje_id)
+
+        # ❌ No permitas ofertas si ya fue aceptado o completado
+        if viaje.estado in ['aceptado', 'en_curso', 'completado', 'completado_pasajero']:
+            raise serializers.ValidationError('Este viaje ya no acepta ofertas.')
+
+        # ✅ Permite crear la oferta
+        serializer.save(viaje=viaje, mototaxista=user)
+
+        # Si el viaje aún está pendiente, pásalo a "negociando"
+        if viaje.estado == 'pendiente':
+            viaje.estado = 'negociando'
+            viaje.save()
+
+
+    @action(detail=True, methods=['post'])
+    def aceptar(self, request, pk=None):
+        """El pasajero acepta una de las ofertas recibidas."""
+        oferta = self.get_object()
+        viaje = oferta.viaje
+
+        # Solo el pasajero del viaje puede aceptar una oferta
+        if request.user != viaje.pasajero:
+            return Response({'error': 'Solo el pasajero puede aceptar una oferta.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # Marcar la oferta aceptada
+        oferta.aceptada = True
+        oferta.save()
+
+        # Actualizar el viaje con la tarifa final y el mototaxista asignado
+        viaje.mototaxista = oferta.mototaxista
+        viaje.tarifa_final = oferta.monto
+        viaje.estado = "aceptado"
+        viaje.save()
+
+        # Marcar las demás ofertas como rechazadas
+        Oferta.objects.filter(viaje=viaje).exclude(pk=oferta.pk).update(aceptada=False)
+
+        return Response({'mensaje': 'Oferta aceptada correctamente.'}, status=status.HTTP_200_OK)
 
 class ViajeViewSet(viewsets.ModelViewSet):
     queryset = Viaje.objects.all()
@@ -254,9 +318,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         }
         return data
 
-from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
-
 class RegistroUsuarioAPIView(APIView):
     permission_classes = [AllowAny]
 
@@ -279,10 +340,5 @@ class RegistroUsuarioAPIView(APIView):
         return Response({'mensaje': f'Usuario {username} creado como {rol} correctamente.'},
                         status=status.HTTP_201_CREATED)
 
-
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
-
-
-
-
