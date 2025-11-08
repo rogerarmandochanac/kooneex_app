@@ -26,6 +26,8 @@ from rest_framework import (viewsets,
                             status,
                             serializers)
 
+from django.db.models import Q
+
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
@@ -97,69 +99,32 @@ class MototaxiViewSet(viewsets.ModelViewSet):
 
         return Response(cercanos)
 
-class OfertaViewSet(viewsets.ModelViewSet):
-    queryset = Oferta.objects.all()
-    serializer_class = OfertaSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def perform_create(self, serializer):
-        """Permite que varios mototaxistas ofrezcan tarifas a un mismo viaje."""
-        user = self.request.user
-        if user.rol != 'mototaxista':
-            raise PermissionError('Solo los mototaxistas pueden ofrecer tarifas.')
-
-        viaje_id = self.request.data.get('viaje')
-        monto = self.request.data.get('monto')
-        tiempo_estimado = self.request.data.get('tiempo_estimado')
-
-        if not viaje_id or not monto:
-            raise ValueError('Debe indicar el viaje y el monto.')
-
-        viaje = Viaje.objects.get(pk=viaje_id)
-
-        # ❌ No permitas ofertas si ya fue aceptado o completado
-        if viaje.estado in ['aceptado', 'en_curso', 'completado', 'completado_pasajero']:
-            raise serializers.ValidationError('Este viaje ya no acepta ofertas.')
-
-        # ✅ Permite crear la oferta
-        serializer.save(viaje=viaje, mototaxista=user)
-
-        # Si el viaje aún está pendiente, pásalo a "negociando"
-        if viaje.estado == 'pendiente':
-            viaje.estado = 'negociando'
-            viaje.save()
-
-
-    @action(detail=True, methods=['post'])
-    def aceptar(self, request, pk=None):
-        """El pasajero acepta una de las ofertas recibidas."""
-        oferta = self.get_object()
-        viaje = oferta.viaje
-
-        # Solo el pasajero del viaje puede aceptar una oferta
-        if request.user != viaje.pasajero:
-            return Response({'error': 'Solo el pasajero puede aceptar una oferta.'},
-                            status=status.HTTP_403_FORBIDDEN)
-
-        # Marcar la oferta aceptada
-        oferta.aceptada = True
-        oferta.save()
-
-        # Actualizar el viaje con la tarifa final y el mototaxista asignado
-        viaje.mototaxista = oferta.mototaxista
-        viaje.tarifa_final = oferta.monto
-        viaje.estado = "aceptado"
-        viaje.save()
-
-        # Marcar las demás ofertas como rechazadas
-        Oferta.objects.filter(viaje=viaje).exclude(pk=oferta.pk).update(aceptada=False)
-
-        return Response({'mensaje': 'Oferta aceptada correctamente.'}, status=status.HTTP_200_OK)
-
 class ViajeViewSet(viewsets.ModelViewSet):
     queryset = Viaje.objects.all()
     serializer_class = ViajeSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if user.rol == 'pasajero':
+            return Viaje.objects.filter(pasajero=user).order_by('-creado_en')
+
+        elif user.rol == 'mototaxista':
+            #Si tiene una oferta activa, mostrar solo esos viajes (para seguimiento)
+            tiene_oferta_activa = Oferta.objects.filter(
+                mototaxista=user,
+                viaje__estado__in=['pendiente', 'aceptado', 'en_curso']
+            )
+
+            if tiene_oferta_activa.exists():
+                # Solo muestra el viaje relacionado con su oferta
+                return Viaje.objects.filter(ofertas__mototaxista=user).distinct()
+
+            # 🔹 Si no tiene oferta activa, mostrar viajes pendientes
+            return Viaje.objects.filter(estado='pendiente').order_by('-creado_en')
+
+        return Viaje.objects.none()
 
     @action(detail=True, methods=['post'])
     def sugerir_tarifa(self, request, pk=None):
@@ -170,7 +135,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
         viaje.save()
         return Response({'mensaje': 'Tarifa sugerida enviada.'}, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['patch'])
     def responder_tarifa(self, request, pk=None):
         viaje = self.get_object()
         decision = request.data.get('decision')  # "aceptar" o "rechazar"
@@ -212,14 +177,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
-    def get_queryset(self):
-        user = self.request.user
-        if user.rol == "mototaxista":
-            # Muestra solo viajes pendientes o asignados al mototaxista
-            return Viaje.objects.filter(estado__in=["pendiente", "aceptado", "en_curso"]).order_by("-creado_en")
-        elif user.rol == "pasajero":
-            return Viaje.objects.filter(pasajero=user).order_by("-creado_en")
-        return Viaje.objects.none()
+    
 
     @action(detail=True, methods=['post'])
     def aceptar(self, request, pk=None):
@@ -252,9 +210,6 @@ class ViajeViewSet(viewsets.ModelViewSet):
 
         if viaje.estado != "en_curso" and viaje.estado != "aceptado":
             return Response({"error": "Solo se pueden completar viajes en curso o aceptados."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if user.rol == 'pasajero':
-            viaje.estado = "completado_pasajero"
         
         if user.rol == 'mototaxista':
             viaje.estado = 'completado'
@@ -283,6 +238,168 @@ class ViajeViewSet(viewsets.ModelViewSet):
 
         return Response({"mensaje": f"Viaje #{viaje.id} iniciado correctamente."}, status=status.HTTP_200_OK)
 
+class OfertaViewSet(viewsets.ModelViewSet):
+    queryset = Oferta.objects.all()
+    serializer_class = OfertaSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Filtra las ofertas según el usuario autenticado."""
+        user = self.request.user
+
+        if user.rol == "mototaxista":
+            return Oferta.objects.filter(mototaxista=user)
+        elif user.rol == "pasajero":
+            return Oferta.objects.filter(viaje__pasajero=user)
+        return Oferta.objects.none()
+
+    def perform_create(self, serializer):
+        """Crea una oferta solo si el mototaxista no tiene otras activas."""
+        user = self.request.user
+
+        if user.rol != 'mototaxista':
+            raise PermissionError("Solo los mototaxistas pueden ofertar.")
+
+        viaje_id = self.request.data.get('viaje')
+        monto = self.request.data.get('monto')
+        tiempo_estimado = self.request.data.get('tiempo_estimado')
+
+        if not viaje_id or not monto:
+            return Response(
+                {"error": "Debe indicar el viaje y el monto."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            viaje = Viaje.objects.get(pk=viaje_id)
+        except Viaje.DoesNotExist:
+            return Response(
+                {"error": "El viaje no existe."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 🔒 Evitar si el mototaxista ya tiene viajes activos
+        viaje_activo = Viaje.objects.filter(
+            Q(mototaxista=user),
+            Q(estado__in=['aceptado', 'en_curso'])
+        ).exists()
+        if viaje_activo:
+            return Response(
+                {"error": "Ya tienes un viaje activo o en curso."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 🔒 Evitar si tiene una oferta pendiente o negociando
+        oferta_activa = Oferta.objects.filter(
+            mototaxista=user,
+            viaje__estado__in=['pendiente', 'negociando']
+        ).exists()
+        if oferta_activa:
+            return Response(
+                {"error": "Ya tienes una oferta activa, espera su resultado."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # 🔒 Evitar si el viaje ya fue tomado
+        if viaje.estado != 'pendiente':
+            return Response(
+                {"error": "Este viaje ya no está disponible."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ✅ Guardar la oferta solo una vez
+        serializer.save(
+            mototaxista=user,
+            viaje=viaje,
+            monto=monto,
+            tiempo_estimado=tiempo_estimado
+        )
+
+    @action(detail=True, methods=['patch'])
+    def aceptar(self, request, pk=None):
+        """El pasajero acepta una oferta."""
+        oferta = self.get_object()
+        viaje = oferta.viaje
+        user = request.user
+        if user != viaje.pasajero:
+            return Response({'error': 'Solo el pasajero puede aceptar una oferta.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        # Si ya hay una oferta aceptada
+        if Oferta.objects.filter(viaje=viaje, aceptada=True).exists():
+            return Response({'error': 'Ya hay una oferta aceptada para este viaje.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        # ✅ Aceptar la oferta
+        oferta.aceptada = True
+        oferta.save()
+        # Actualizar viaje
+        viaje.mototaxista = oferta.mototaxista
+        viaje.tarifa_final = oferta.monto
+        viaje.estado = 'aceptado'
+        viaje.save()
+
+        # ❌ Rechazar las demás
+        Oferta.objects.filter(viaje=viaje).exclude(pk=oferta.pk).update(aceptada=False)
+
+        return Response({
+            'mensaje': 'Oferta aceptada correctamente.',
+            'viaje_id': viaje.id,
+            'mototaxista': oferta.mototaxista.username,
+            'estado_viaje': viaje.estado
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['delete'])
+    def rechazar(self, request, pk=None):
+        """El pasajero rechaza una oferta."""
+        oferta = self.get_object()
+        viaje = oferta.viaje
+        user = request.user
+
+        if user != viaje.pasajero:
+            return Response({'error': 'Solo el pasajero puede rechazar una oferta.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        oferta.aceptada = False
+        oferta.save()
+
+        # Si todas las ofertas fueron rechazadas, el viaje vuelve a estar disponible
+        if not Oferta.objects.filter(viaje=viaje, aceptada=True).exists():
+            viaje.estado = 'pendiente'
+            viaje.save()
+
+        return Response({
+            'mensaje': 'Oferta rechazada.',
+            'viaje_id': viaje.id,
+            'estado_viaje': viaje.estado
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def notificaciones(self, request):
+        """Endpoint para que el mototaxista consulte si su oferta fue aceptada o rechazada."""
+        user = request.user
+
+        if user.rol != 'mototaxista':
+            return Response({'error': 'Solo mototaxistas pueden usar este endpoint.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        ofertas = Oferta.objects.filter(mototaxista=user).select_related('viaje')
+        data = []
+
+        for o in ofertas:
+            estado = (
+                'aceptada ✅' if o.aceptada else
+                'rechazada ❌' if o.viaje.estado == 'pendiente' else
+                'en espera ⏳'
+            )
+            data.append({
+                'id': o.id,
+                'viaje_id': o.viaje.id,
+                'estado_viaje': o.viaje.estado,
+                'resultado': estado,
+            })
+
+        return Response(data, status=status.HTTP_200_OK)
+    
 class PagoViewSet(viewsets.ModelViewSet):
     queryset = Pago.objects.all()
     serializer_class = PagoSerializer
@@ -296,8 +413,6 @@ class PagoViewSet(viewsets.ModelViewSet):
         elif user.rol == 'mototaxista':
             return Pago.objects.filter(viaje__mototaxi__conductor=user)
         return Pago.objects.none()
-
-
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod

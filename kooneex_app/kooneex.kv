@@ -9,187 +9,231 @@ ScreenManager:
     name: "login"
     username: username.text
     password: password.text
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 20
-        spacing: 10
+    # Fondo principal
+    MDFloatLayout:
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
 
-        Label:
-            text: "Iniciar Sesión"
-            font_size: 24
+        MDBoxLayout:
+            orientation: 'vertical'
+            spacing: "24dp"
+            padding: "40dp"
+            size_hint: 0.9, 0.7
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
 
-        TextInput:
-            id: username
-            hint_text: "Usuario"
+            MDLabel:
+                text: "Iniciar Sesión"
+                halign: "center"
+                valign: "middle"
+                size_hint_y: None
+                height: self.texture_size[1]
+                font_name: "Poppins"
+                font_style: "H5"
+                theme_text_color: "Custom"
+                text_color: 1, 1, 1, 1
 
-        TextInput:
-            id: password
-            hint_text: "Contraseña"
-            password: True
+            MDTextField:
+                id: username
+                hint_text: "Usuario"
+                icon_right: "account"
+                mode: "fill"
+                fill_color: 1, 1, 1, 0.25
+                text_color: 1, 1, 1, 1
+                hint_text_color: 1, 1, 1, 0.8
+                icon_right_color: 1, 1, 1, 1
+                line_color_focus: 1, 1, 1, 1
+                font_name: "Poppins"
 
-        Button:
-            text: "Ingresar"
-            on_release: root.login()
+            MDTextField:
+                id: password
+                hint_text: "Contraseña"
+                password: True
+                icon_right: "lock"
+                mode: "fill"
+                fill_color: 1, 1, 1, 0.25
+                text_color: 1, 1, 1, 1
+                hint_text_color: 1, 1, 1, 0.8
+                icon_right_color: 1, 1, 1, 1
+                line_color_focus: 1, 1, 1, 1
+                font_name: "Poppins"
 
-        Label:
-            text: root.mensaje
-            color: 1,0,0,1
+            MDRaisedButton:
+                text: "Ingresar"
+                md_bg_color: 1, 1, 1, 1
+                text_color: 0.9686, 0.5765, 0.1176, 1
+                font_name: "Poppins"
+                pos_hint: {"center_x": 0.5}
+                on_release: root.login()
+
+            MDLabel:
+                id: mensaje_label
+                text: root.mensaje
+                halign: "center"
+                theme_text_color: "Custom"
+                text_color: 1, 1, 1, 1
+                font_name: "Inter"
 
 <ViajeScreen>:
     name: "viaje"
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 10
-        spacing: 10
-
-        Label:
-            text: "Solicitar Viaje"
-            font_size: 22
-
+    MDFloatLayout:
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
         BoxLayout:
-            id: solicitud_container
             orientation: 'vertical'
+            padding: 10
             spacing: 10
 
-            TextInput:
-                id: origen_lat
-                hint_text: "Latitud de origen"
-                input_filter: "float"
+            Label:
+                text: "Solicitar Viaje"
+                font_size: 22
 
-            TextInput:
-                id: origen_lon
-                hint_text: "Longitud de origen"
-                input_filter: "float"
+            BoxLayout:
+                id: solicitud_container
+                orientation: 'vertical'
+                spacing: 10
 
-            TextInput:
-                id: destino_lat
-                hint_text: "Latitud de destino"
-                input_filter: "float"
+                TextInput:
+                    id: origen_lat
+                    hint_text: "Latitud de origen"
+                    input_filter: "float"
 
-            TextInput:
-                id: destino_lon
-                hint_text: "Longitud de destino"
-                input_filter: "float"
-            
-            TextInput:
-                id: cantidad_pasajeros
-                hint_text: "Cantidad de pasajeros"
-                input_filter: "int"
+                TextInput:
+                    id: origen_lon
+                    hint_text: "Longitud de origen"
+                    input_filter: "float"
 
-            Button:
-                text: "Solicitar viaje"
-                on_release:root.solicitar_viaje(origen_lat.text, origen_lon.text, destino_lat.text, destino_lon.text, cantidad_pasajeros.text)
+                TextInput:
+                    id: destino_lat
+                    hint_text: "Latitud de destino"
+                    input_filter: "float"
 
-        Label:
-            id: mensaje_label
-            text: ""
-            color: 1, 1, 1, 1
-            size_hint_y: None
-            height: 80
-            text_size: self.size
-            halign: "center"
-            valign: "middle"
+                TextInput:
+                    id: destino_lon
+                    hint_text: "Longitud de destino"
+                    input_filter: "float"
+                
+                TextInput:
+                    id: cantidad_pasajeros
+                    hint_text: "Cantidad de pasajeros"
+                    input_filter: "int"
+
+                Button:
+                    text: "Solicitar viaje"
+                    on_release:root.solicitar_viaje(origen_lat.text, origen_lon.text, destino_lat.text, destino_lon.text, cantidad_pasajeros.text)
+
+            Label:
+                id: mensaje_label
+                text: ""
+                color: 1, 1, 1, 1
+                size_hint_y: None
+                height: 80
+                text_size: self.size
+                halign: "center"
+                valign: "middle"
 
 <ViajeEnCursoScreen>:
-    BoxLayout:
-        orientation: "vertical"
-        padding: 10
-        spacing: 10
+    name: "viaje_en_curso"
+    MDFloatLayout:
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
+        BoxLayout:
+            orientation: "vertical"
+            padding: 20
+            spacing: 10
 
-        Label:
-            text: root.viaje_info
-            color: 1, 1, 1, 1
-            text_size: self.size
-            halign: "center"
-            valign: "middle"
+            Label:
+                id: info_label
+                text: "Cargando información del viaje..."
+                color: 1, 1, 1, 1
 
-        Button:
-            text: "Marcar como completado"
-            size_hint_y: None
-            height: 50
-            background_color: (0, 0.7, 0, 1)
-            on_release:
-                app.root.get_screen("viaje_en_curso").completar_viaje(app.viaje_en_curso_id)
+            Button:
+                text: "Marcar como completado"
+                background_color: 0, 1, 0, 1
+                size_hint_y: None
+                height: 50
+                on_release: root.marcar_completado()
+
 <ViajeEnCursoMotoScreen>:
-    BoxLayout:
-        orientation: "vertical"
-        padding: 10
-        spacing: 10
+    name: "viaje_en_curso_moto"
+    MDFloatLayout:
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
+        BoxLayout:
+            orientation: "vertical"
+            padding: 20
+            spacing: 10
 
-        Label:
-            text: root.viaje_info
-            color: 1,1,1,1
-            text_size: self.size
-            halign: "center"
-            valign: "middle"
+            Label:
+                id: info_label
+                text: "Cargando viaje en curso..."
+                color: 1, 1, 1, 1
 
-        Button:
-            text: "Marcar como completado"
-            size_hint_y: None
-            height: 50
-            background_color: (0,0.7,0,1)
-            on_release:
-                app.root.get_screen("viaje_en_curso_moto").completar_viaje(app.viaje_en_curso_id)
+            Button:
+                text: "Marcar como completado"
+                background_color: 0, 1, 0, 1
+                size_hint_y: None
+                height: 50
+                on_release: root.marcar_completado()
 
 <PendientesScreen>:
-    BoxLayout:
-        orientation: "vertical"
-        padding: 10
-        spacing: 10
+    MDFloatLayout:
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
+        BoxLayout:
+            orientation: "vertical"
+            padding: 10
+            spacing: 10
 
-        Label:
-            text: "🚖 Viajes Pendientes"
-            font_size: 22
-            bold: True
-            size_hint_y: None
-            height: 40
-            color: 1, 1, 0, 1
-
-        ScrollView:
-            do_scroll_x: False
-            do_scroll_y: True
-            GridLayout:
-                id: viajes_container
-                cols: 1
+            Label:
+                text: "Viajes Pendientes"
+                font_size: 22
+                bold: True
                 size_hint_y: None
-                height: self.minimum_height
-                spacing: 10
-        Label:
-            id: notificacion_label
-            text: ""
-            size_hint_y: None
-            height: 30
-            color: 0, 1, 0, 1
-            halign: "center"
+                height: 40
+                color: 1, 1, 0, 1
+
+            ScrollView:
+                do_scroll_x: False
+                do_scroll_y: True
+                GridLayout:
+                    id: viajes_container
+                    cols: 1
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: 10
+            Label:
+                id: notificacion_label
+                text: ""
+                size_hint_y: None
+                height: 30
+                color: 0, 1, 0, 1
+                halign: "center"
         
 <TarifaScreen>:
-    BoxLayout:
-        orientation: "vertical"
-        padding: 10
-        spacing: 10
+    MDFloatLayout:
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
+        BoxLayout:
+            orientation: "vertical"
+            padding: 10
+            spacing: 10
 
-        Label:
-            text: "💰 Ofertas de Mototaxistas"
-            font_size: 22
-            bold: True
-            size_hint_y: None
-            height: 40
-            color: 1, 1, 0, 1
-
-        ScrollView:
-            do_scroll_x: False
-            do_scroll_y: True
-
-            GridLayout:
-                id: tarifas_container
-                cols: 1
+            Label:
+                text: "Ofertas de Mototaxistas"
+                font_size: 22
+                bold: True
                 size_hint_y: None
-                height: self.minimum_height
-                spacing: 10
+                height: 40
+                color: 1, 1, 0, 1
 
-        Label:
-            id: mensaje_tarifas
-            text: ""
-            size_hint_y: None
-            height: 30
-            color: 0, 1, 0, 1
+            ScrollView:
+                do_scroll_x: False
+                do_scroll_y: True
+
+                GridLayout:
+                    id: tarifas_container
+                    cols: 1
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: 10
+
+            Label:
+                id: mensaje_tarifas
+                text: ""
+                size_hint_y: None
+                height: 30
+                color: 0, 1, 0, 1

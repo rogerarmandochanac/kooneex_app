@@ -39,16 +39,16 @@ class MototaxiSerializer(serializers.ModelSerializer):
 class OfertaSerializer(serializers.ModelSerializer):
     mototaxista_nombre = serializers.SerializerMethodField()
 
+    class Meta:
+        model = Oferta
+        fields = '__all__'
+        read_only_fields = ['mototaxista']
+
     def get_mototaxista_nombre(self, obj):
         if obj.mototaxista:
             nombre = f"{obj.mototaxista.first_name} {obj.mototaxista.last_name}".strip()
             return nombre or obj.mototaxista.username
         return None
-
-    class Meta:
-        model = Oferta
-        fields = '__all__'
-
 
 class ViajeSerializer(serializers.ModelSerializer):
     ofertas = OfertaSerializer(many=True, read_only=True)
@@ -66,7 +66,7 @@ class ViajeSerializer(serializers.ModelSerializer):
         if user.rol == 'pasajero':
             activo = Viaje.objects.filter(
                 pasajero=user,
-                estado__in=['pendiente', 'aceptado', 'negociando']
+                estado__in=['pendiente', 'aceptado']
             ).exists()
             if activo:
                 raise serializers.ValidationError("Ya tienes un viaje activo o pendiente.")

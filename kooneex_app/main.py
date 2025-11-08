@@ -8,9 +8,10 @@ from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
-from functools import partial
+from kivy.core.text import LabelBase
 
-
+from kivymd.app import MDApp
+from kivymd.uix.screen import MDScreen
 
 Window.size = (360, 640)
 
@@ -19,14 +20,13 @@ API_URL = "http://127.0.0.1:8000/api"
 # ==============================
 # PANTALLA DE LOGIN
 # ==============================
-class LoginScreen(Screen):
+class LoginScreen(MDScreen):
     username = StringProperty("")
     password = StringProperty("")
     mensaje = StringProperty("")
 
     def login(self):
         datos = {"username": self.username, "password": self.password}
-
         try:
             resp = requests.post(f"{API_URL}/token/", json=datos)
             if resp.status_code == 200:
@@ -48,7 +48,7 @@ class LoginScreen(Screen):
                     with open("rol.txt", "w") as f:
                         f.write(rol)
 
-                    # 🔹 Verificación por rol
+                    #Verificación por rol
                     if rol == "pasajero":
                         self.verificar_viaje_activo(access_token)
                     elif rol == "mototaxista":
@@ -73,11 +73,11 @@ class LoginScreen(Screen):
                 # Busca si hay viajes no terminados
                 activos = [
                     v for v in viajes
-                    if v['estado'] in ['pendiente', 'negociando', 'aceptado']
+                    if v['estado'] in ['pendiente', 'aceptado']
                 ]
 
                 if activos:
-                    # 🚕 Si tiene uno, va a pantalla de tarifas
+                    #Si tiene uno, va a pantalla de tarifas
                     self.manager.current = "tarifas"
                 else:
                     # 🟢 Si no, puede crear uno nuevo
@@ -89,8 +89,6 @@ class LoginScreen(Screen):
         except Exception as e:
             print("Error al verificar viaje activo:", e)
             self.manager.current = "viaje"
-
-
 
 # ==============================
 # PANTALLA PASAJERO
@@ -112,7 +110,7 @@ class ViajeScreen(Screen):
 
             if resp.status_code == 200:
                 viajes = resp.json()
-                viaje_activo = next((v for v in viajes if v['estado'] in ['pendiente','aceptado','en_curso','negociando']), None)
+                viaje_activo = next((v for v in viajes if v['estado'] in ['pendiente','aceptado']), None)
 
                 if viaje_activo:
                     # Hay un viaje activo, redirigir al screen de viaje en curso
@@ -175,98 +173,71 @@ class ViajeScreen(Screen):
         except Exception as e:
             self.ids.mensaje_label.text = f"Error de conexión: {e}"
 
-
-class ViajeEnCursoScreen(Screen):
-    viaje_info = StringProperty("")
-
-    def mostrar_viaje(self, viaje):
-        """
-        Recibe el dict del viaje y actualiza la info del screen.
-        """
-        self.viaje_info = (
-            f"🚖 Viaje #{viaje['id']}\n"
-            f"Origen: ({viaje['origen_lat']}, {viaje['origen_lon']})\n"
-            f"Destino: ({viaje['destino_lat']}, {viaje['destino_lon']})\n"
-            f"Pasajeros: {viaje.get('cantidad_pasajeros', 1)}\n"
-            f"Mototaxista: {viaje.get('mototaxista', 'Sin asignar')}\n"
-            f"Estado: {viaje['estado']}"
-        )
-
-    def completar_viaje(self, viaje_id):
-        """
-        Cambia el estado del viaje a completado
-        """
-        try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-            headers = {"Authorization": f"Bearer {token}"}
-            resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json={"estado": "completado"}, headers=headers)
-
-            if resp.status_code in [200, 202]:
-                self.viaje_info = "✅ Viaje completado."
-                # Redirigir al screen de inicio o de solicitud de viaje
-                self.manager.current = "viaje"  # Para pasajeros
-                # Para mototaxista podrían regresar a PendientesScreen
-            else:
-                self.viaje_info = f"❌ Error: {resp.text}"
-        except Exception as e:
-            self.viaje_info = f"Error de conexión: {e}"
-
-class ViajeEnCursoMotoScreen(Screen):
-    viaje_info = StringProperty("")
-
-    def mostrar_viaje(self, viaje):
-        self.viaje_info = (
-            f"🚖 Viaje #{viaje['id']}\n"
-            f"Origen: ({viaje['origen_lat']}, {viaje['origen_lon']})\n"
-            f"Destino: ({viaje['destino_lat']}, {viaje['destino_lon']})\n"
-            f"Pasajeros: {viaje.get('cantidad_pasajeros', 1)}\n"
-            f"Estado: {viaje['estado']}"
-        )
-
-    def completar_viaje(self, viaje_id):
-        try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-            headers = {"Authorization": f"Bearer {token}"}
-            resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json={"estado": "completado"}, headers=headers)
-
-            if resp.status_code in [200, 202]:
-                self.viaje_info = "✅ Viaje completado."
-                self.manager.current = "pendientes"  # Volver a la lista de pendientes
-            else:
-                self.viaje_info = f"❌ Error: {resp.text}"
-        except Exception as e:
-            self.viaje_info = f"Error: {e}"
-
-
 # ==============================
-# PANTALLA MOTOTAXISTA
+# PANTALLA MOTOTAXISTA DE SOLICITUD DE VIAJE
 # ==============================
 class PendientesScreen(Screen):
     def on_pre_enter(self):
-        # Verificar si existe un viaje en curso para este mototaxista
+        """Verifica si el mototaxista ya tiene una oferta activa o un viaje en curso."""
         try:
             with open("token.txt", "r") as f:
                 token = f.read().strip()
             headers = {"Authorization": f"Bearer {token}"}
-            resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
-            if resp.status_code == 200:
-                viajes = resp.json()
-                viaje_curso = next((v for v in viajes if v['estado'] == 'en_curso'), None)
-                if viaje_curso:
-                    # Guardamos id del viaje activo
-                    App.get_running_app().viaje_en_curso_id = viaje_curso['id']
-                    self.manager.get_screen("viaje_en_curso_moto").mostrar_viaje(viaje_curso)
+            # Obtener usuario autenticado
+            user_info = requests.get(f"{API_URL}/usuario/", headers=headers)
+            if user_info.status_code == 200:
+                usuario = user_info.json().get("username")
+            else:
+                usuario = None
+
+            # 1️ Verificar si tiene un viaje activo (aceptado o en curso)
+            resp_viajes = requests.get(f"{API_URL}/viajes/", headers=headers)
+            if resp_viajes.status_code == 200:
+                viajes = resp_viajes.json()
+                viaje_activo = next(
+                    (
+                        v for v in viajes
+                        if v.get("mototaxista") == usuario
+                        and v["estado"] in ["en_curso", "aceptado"]
+                    ),
+                    None
+                )
+
+                if viaje_activo:
+                    App.get_running_app().viaje_en_curso_id = viaje_activo["id"]
+                    self.manager.get_screen("viaje_en_curso_moto").cargar_viaje_en_curso()
                     self.manager.current = "viaje_en_curso_moto"
-                else:
-                    # No hay viaje en curso, mostrar pendientes
-                    self.cargar_viajes_pendientes()
+                    return
+            else:
+                print("Error al obtener viajes:", resp_viajes.text)
+
+            # 2️ Verificar si el mototaxista ya envió una oferta
+            resp_ofertas = requests.get(f"{API_URL}/ofertas/", headers=headers)
+            if resp_ofertas.status_code == 200:
+                ofertas = resp_ofertas.json()
+                oferta_activa = next(
+                    (
+                        o for o in ofertas
+                        if o.get("mototaxista_nombre") == usuario
+                    ),
+                    None
+                )
+
+                if oferta_activa:
+                    self.mostrar_espera_respuesta(oferta_activa["viaje"])
+                    return
+            else:
+                print("Error al obtener ofertas:", resp_ofertas.text)
+
+            # 3️ Si no tiene viaje activo ni oferta, cargar viajes pendientes
+            self.cargar_viajes_pendientes()
+
         except Exception as e:
-            print("Error al verificar viaje en curso:", e)
+            print("Error al verificar estado del mototaxista:", e)
 
     def cargar_viajes_pendientes(self):
+        """Carga los viajes pendientes visibles para el mototaxista."""
         try:
             with open("token.txt", "r") as f:
                 token = f.read().strip()
@@ -278,22 +249,26 @@ class PendientesScreen(Screen):
             layout.clear_widgets()
 
             if resp.status_code == 200:
+                
                 viajes = resp.json()
-
-                # Primero revisamos si hay algún viaje en curso para este mototaxista
-                viaje_en_curso = next(
-                    (v for v in viajes if v.get("mototaxista") == "juan_moto" and v["estado"] == "en_curso"), None
+                #Obtener el nombre del usuario autenticado
+                user_info = requests.get(f"{API_URL}/usuario/", headers=headers)
+                if user_info.status_code == 200:
+                    usuario = user_info.json().get("username")
+                else:
+                    usuario = None
+                #No mostrar nada si el mototaxista ya tiene un viaje activo
+                tiene_viaje_activo = any(
+                    v.get("mototaxista") == usuario and v["estado"] in ["en_curso", "aceptado"]
+                    for v in viajes
                 )
+                if tiene_viaje_activo:
+                    self.manager.get_screen("viaje_en_curso_moto").cargar_viaje_en_curso()
+                    self.manager.current = "viaje_en_curso_moto"
+                    return
 
-                if viaje_en_curso:
-                    # Redirigir al screen de viaje en curso
-                    viaje_screen = self.manager.get_screen("viaje_en_curso")
-                    viaje_screen.mostrar_viaje(viaje_en_curso)
-                    self.manager.current = "viaje_en_curso"
-                    return  # Salimos para no mostrar otros viajes
-
-                # Mostrar viajes pendientes o aceptados
-                pendientes = [v for v in viajes if v["estado"] in ["pendiente", "aceptado"]]
+                #Filtrar viajes pendientes
+                pendientes = [v for v in viajes if v["estado"] == "pendiente"]
 
                 if not pendientes:
                     layout.add_widget(Label(text="No hay viajes pendientes.", color=(1, 1, 1, 1)))
@@ -307,40 +282,32 @@ class PendientesScreen(Screen):
                         padding=10,
                         spacing=5
                     )
-                    card.add_widget(Label(text=f"🚖 Viaje #{v['id']}", color=(1, 1, 0, 1)))
+                    card.add_widget(Label(text=f"Viaje #{v['id']}", color=(1, 1, 0, 1)))
                     card.add_widget(Label(text=f"Pasajeros: {v.get('cantidad_pasajeros', 1)}", color=(1, 1, 1, 1)))
-                    card.add_widget(Label(text=f"Costo sugerido: ${v.get('costo_estimado', 0)}", color=(1, 1, 1, 1)))
+                    card.add_widget(Label(text=f"Tarifa sugerida: ${v.get('costo_estimado', 0)}", color=(1, 1, 1, 1)))
+
+                    tarifa_input = TextInput(
+                        hint_text="Tu tarifa (opcional)",
+                        input_filter="float",
+                        multiline=False,
+                        size_hint_y=None,
+                        height=40,
+                        text=str(v.get("costo_estimado", ""))
+                    )
+                    card.add_widget(tarifa_input)
 
                     btn_box = BoxLayout(size_hint_y=None, height=40, spacing=10)
 
-                    if v["estado"] == "pendiente":
-                        tarifa_input = TextInput(
-                            hint_text="Tu tarifa (opcional)",
-                            input_filter="float",
-                            multiline=False,
-                            size_hint_y=None,
-                            height=40,
-                            text=str(v.get("costo_estimado", ""))
-                        )
-                        card.add_widget(tarifa_input)
-
-                        btn_box.add_widget(Button(
-                            text="Sugerir tarifa",
-                            background_color=(0, 1, 0, 1),
-                            on_release=lambda x, vid=v['id'], tinput=tarifa_input: self.sugerir_tarifa(vid, tinput.text)
-                        ))
-                        btn_box.add_widget(Button(
-                            text="Rechazar",
-                            background_color=(1, 0, 0, 1),
-                            on_release=lambda x, vid=v['id']: self.rechazar_viaje(vid)
-                        ))
-
-                    elif v["estado"] == "aceptado":
-                        btn_box.add_widget(Button(
-                            text="Iniciar viaje",
-                            background_color=(0, 0.5, 1, 1),
-                            on_release=lambda x, vid=v['id']: self.iniciar_viaje(vid)
-                        ))
+                    btn_box.add_widget(Button(
+                        text="Sugerir tarifa",
+                        background_color=(0, 1, 0, 1),
+                        on_release=lambda x, vid=v["id"], tinput=tarifa_input: self.sugerir_tarifa(vid, tinput.text)
+                    ))
+                    btn_box.add_widget(Button(
+                        text="Rechazar",
+                        background_color=(1, 0, 0, 1),
+                        on_release=lambda x, vid=v["id"]: self.rechazar_viaje(vid)
+                    ))
 
                     card.add_widget(btn_box)
                     layout.add_widget(card)
@@ -351,33 +318,40 @@ class PendientesScreen(Screen):
         except Exception as e:
             layout.clear_widgets()
             layout.add_widget(Label(text=f"Error: {e}", color=(1, 0, 0, 1)))
-    
+
     def sugerir_tarifa(self, viaje_id, tarifa):
-        """El mototaxista sugiere una tarifa personalizada"""
+        """El mototaxista sugiere una tarifa personalizada y bloquea otras opciones."""
         try:
             with open("token.txt", "r") as f:
                 token = f.read().strip()
 
             headers = {"Authorization": f"Bearer {token}"}
-            datos = {"estado": "negociando"}
+            datos = {}
 
             if tarifa:
                 try:
-                    datos["tarifa_sugerida"] = float(tarifa)
+                    datos["monto"] = float(tarifa)
                 except ValueError:
                     print("Tarifa no válida")
+            datos['viaje'] = viaje_id
+            datos['tiempo_estimado'] = 30
 
-            resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
+            resp = requests.post(f"{API_URL}/ofertas/", json=datos, headers=headers)
 
-            if resp.status_code in [200, 202]:
-                self.cargar_viajes_pendientes()
+            if resp.status_code in [200, 201]:
+                print("✅ Tarifa sugerida correctamente.")
+                
+                # 🔹 Bloquear botones y mostrar mensaje
+                self.mostrar_espera_respuesta(viaje_id)
+
             else:
                 print("Error al sugerir tarifa:", resp.text)
+
         except Exception as e:
             print("Error de conexión:", e)
 
     def rechazar_viaje(self, viaje_id):
-        """El mototaxista rechaza el viaje"""
+        """El mototaxista rechaza el viaje."""
         try:
             with open("token.txt", "r") as f:
                 token = f.read().strip()
@@ -393,34 +367,95 @@ class PendientesScreen(Screen):
                 print("Error al rechazar viaje:", resp.text)
         except Exception as e:
             print("Error de conexión:", e)
+    
+    def mostrar_espera_respuesta(self, viaje_id):
+        """Bloquea botones y muestra mensaje de espera después de sugerir tarifa."""
+        layout = self.ids.viajes_container
+        layout.clear_widgets()
+
+        # Crear una sola tarjeta con mensaje
+        card = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            height=200,
+            padding=10,
+            spacing=5
+        )
+        card.add_widget(Label(text=f"Oferta enviada para el viaje #{viaje_id}", color=(1, 1, 0, 1)))
+        card.add_widget(Label(text="Esperando respuesta del pasajero...", color=(1, 1, 1, 1)))
+
+        # Botón para cancelar la oferta
+        cancelar_btn = Button(
+            text="Cancelar oferta",
+            background_color=(1, 0.5, 0, 1),
+            size_hint_y=None,
+            height=40,
+            on_release=lambda x: self.cancelar_oferta(viaje_id)
+        )
+        card.add_widget(cancelar_btn)
+
+        layout.add_widget(card)
 
     def iniciar_viaje(self, viaje_id):
+        """Inicia el viaje y pasa al screen de viaje en curso."""
         try:
             with open("token.txt", "r") as f:
                 token = f.read().strip()
 
             headers = {"Authorization": f"Bearer {token}"}
-            # Llamada al endpoint para iniciar viaje
             resp = requests.post(f"{API_URL}/viajes/{viaje_id}/iniciar/", headers=headers)
 
             if resp.status_code == 200:
-                viaje = resp.json()  # Obtenemos el viaje actualizado
-                # Redirigir al screen de viaje en curso
-                viaje_screen = self.manager.get_screen("viaje_en_curso")
+                viaje = resp.json()
+                viaje_screen = self.manager.get_screen("viaje_en_curso_moto")
                 viaje_screen.mostrar_viaje(viaje)
-                self.manager.current = "viaje_en_curso"
+                self.manager.current = "viaje_en_curso_moto"
             else:
                 print(f"Error al iniciar viaje: {resp.text}")
 
         except Exception as e:
             print(f"Error de conexión: {e}")
 
-# --- TARIFASCREEN (PASAJERO) ---
-class TarifaScreen(Screen):
-    def on_pre_enter(self):
-        self.cargar_tarifas()
+# ==============================
+# APLICACION VIAJE EN CURSO PARA EL MOTOTAXISTA
+# ==============================
+class ViajeEnCursoScreen(Screen):
+    def cargar_viaje_en_curso(self):
+        """Carga la información del viaje en curso del pasajero"""
+        try:
+            with open("token.txt", "r") as f:
+                token = f.read().strip()
+            headers = {"Authorization": f"Bearer {token}"}
 
-    def cargar_tarifas(self):
+            with open("viaje_actual.txt", "r") as f:
+                viaje_id = f.read().strip()
+
+            resp = requests.get(f"{API_URL}/viajes/{viaje_id}/", headers=headers)
+
+            if resp.status_code == 200:
+                viaje = resp.json()
+                self.ids.info_label.text = (
+                    f"🚖 Viaje #{viaje['id']}\n"
+                    f"Mototaxista: {viaje.get('mototaxista_nombre', 'No asignado')}\n"
+                    f"Tarifa: ${viaje.get('tarifa_final', 'N/A')}\n"
+                    f"Estado: {viaje['estado']}"
+                )
+            else:
+                self.ids.info_label.text = "Error al cargar el viaje."
+
+        except FileNotFoundError:
+            self.ids.info_label.text = "No hay viaje activo."
+        except Exception as e:
+            self.ids.info_label.text = f"Error: {e}"
+
+
+class ViajeEnCursoMotoScreen(Screen):
+    def on_pre_enter(self):
+        """Carga el viaje en curso del mototaxista al entrar en el screen"""
+        self.cargar_viaje_en_curso()
+
+    def cargar_viaje_en_curso(self):
+        """Carga la información del viaje actual del mototaxista"""
         try:
             with open("token.txt", "r") as f:
                 token = f.read().strip()
@@ -428,73 +463,226 @@ class TarifaScreen(Screen):
             headers = {"Authorization": f"Bearer {token}"}
             resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
-            layout = self.ids.tarifas_container
-            layout.clear_widgets()
-
             if resp.status_code == 200:
                 viajes = resp.json()
-                # Filtrar viajes que están "negociando" o similares
-                ofertas = [v for v in viajes if v['estado'] == 'negociando']
-                if not ofertas:
-                    layout.add_widget(Label(text="Aún no hay ofertas de mototaxistas."))
+                en_curso = next((v for v in viajes if v["estado"] == "aceptado"), None)
+
+                if en_curso:
+                    self.ids.info_label.text = (
+                        f"Viaje #{en_curso['id']}\n"
+                        f"Pasajero: {en_curso.get('pasajero_nombre', 'No disponible')}\n"
+                        f"Destino: {en_curso.get('destino_lat', 'N/A')}, {en_curso.get('destino_lon', 'N/A')}\n"
+                        f"Tarifa: ${en_curso.get('tarifa_final', 'N/A')}\n"
+                        f"Estado: {en_curso['estado']}"
+                    )
+
+                    # Guardar el ID del viaje actual en un archivo para referencia rápida
+                    with open("viaje_actual.txt", "w") as f:
+                        f.write(str(en_curso["id"]))
                 else:
-                    for v in ofertas:
-                        card = BoxLayout(
-                            orientation="vertical",
-                            size_hint_y=None,
-                            height=140,
-                            padding=10,
-                            spacing=5
-                        )
-                        card.add_widget(Label(text=f"Mototaxista: {v['mototaxista']}", color=(1,1,1,1)))
-                        card.add_widget(Label(text=f"Tarifa sugerida: ${v.get('tarifa_sugerida', 0)}", color=(0,1,0,1)))
-
-                        btn_box = BoxLayout(size_hint_y=None, height=40, spacing=10)
-                        btn_box.add_widget(Button(
-                            text="Aceptar",
-                            background_color=(0,1,0,1),
-                            on_release=lambda x, vid=v['id']: self.aceptar_tarifa(vid)
-                        ))
-                        btn_box.add_widget(Button(
-                            text="Rechazar",
-                            background_color=(1,0,0,1),
-                            on_release=lambda x, vid=v['id']: self.rechazar_tarifa(vid)
-                        ))
-
-                        card.add_widget(btn_box)
-                        layout.add_widget(card)
+                    self.ids.info_label.text = "No tienes viajes en curso."
             else:
-                layout.add_widget(Label(text="Error al cargar tarifas."))
+                self.ids.info_label.text = f"Error al cargar: {resp.text}"
+
+        except Exception as e:
+            self.ids.info_label.text = f"Error de conexión: {e}"
+
+    def iniciar_viaje(self):
+        """Permite al mototaxista marcar el viaje como 'en curso'"""
+        try:
+            with open("token.txt", "r") as f:
+                token = f.read().strip()
+            with open("viaje_actual.txt", "r") as f:
+                viaje_id = f.read().strip()
+
+            headers = {"Authorization": f"Bearer {token}"}
+            datos = {"estado": "en_curso"}
+
+            resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
+
+            if resp.status_code in [200, 202]:
+                self.ids.info_label.text = "✅ Viaje iniciado. En camino al destino."
+                self.ids.btn_iniciar.disabled = True
+                self.ids.btn_completar.disabled = False
+            else:
+                self.ids.info_label.text = f"❌ Error al iniciar: {resp.text}"
+
+        except Exception as e:
+            self.ids.info_label.text = f"Error: {e}"
+
+    def marcar_completado(self):
+        """Permite al mototaxista marcar su viaje como completado"""
+        try:
+            with open("token.txt", "r") as f:
+                token = f.read().strip()
+            with open("viaje_actual.txt", "r") as f:
+                viaje_id = f.read().strip()
+
+            headers = {"Authorization": f"Bearer {token}"}
+            datos = {"estado": "completado"}
+
+            resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
+
+            if resp.status_code in [200, 202]:
+                self.ids.info_label.text = "✅ Viaje completado correctamente."
+            else:
+                self.ids.info_label.text = f"❌ Error al completar: {resp.text}"
+
+        except Exception as e:
+            self.ids.info_label.text = f"Error: {e}"
+
+
+
+# ==============================
+# APLICACIÓN TARIFA
+# ==============================
+class TarifaScreen(Screen):
+    def on_pre_enter(self):
+        self.cargar_ofertas()
+
+    def cargar_ofertas(self):
+        """Carga las ofertas de mototaxistas para el viaje activo del pasajero"""
+        layout = self.ids.tarifas_container
+        layout.clear_widgets()
+
+        try:
+            with open("token.txt", "r") as f:
+                token = f.read().strip()
+
+            headers = {"Authorization": f"Bearer {token}"}
+
+            # 🔹 Obtener el viaje activo del pasajero
+            resp_viajes = requests.get(f"{API_URL}/viajes/", headers=headers)
+            if resp_viajes.status_code != 200:
+                layout.add_widget(Label(text="Error al obtener viajes."))
+                return
+
+            viajes = resp_viajes.json()
+            viajes_en_curso = next(
+                (v for v in viajes if v["estado"] in ["aceptado"]),
+                None
+            )
+
+            if viajes_en_curso:
+                viaje_screen = self.manager.get_screen("viaje_en_curso")
+                viaje_screen.cargar_viaje_en_curso()
+                self.manager.current = "viaje_en_curso"
+                
+            viaje_activo = next(
+                (v for v in viajes if v["estado"] in ["pendiente"]),
+                None
+            )
+
+            if not viaje_activo:
+                layout.add_widget(Label(text="No tienes viajes activos."))
+                return
+
+            viaje_id = viaje_activo["id"]
+
+            #Obtener las ofertas relacionadas al viaje
+            resp_ofertas = requests.get(f"{API_URL}/ofertas/", headers=headers)
+            if resp_ofertas.status_code != 200:
+                layout.add_widget(Label(text="Error al cargar ofertas."))
+                return
+
+            ofertas = [o for o in resp_ofertas.json() if o["viaje"] == viaje_id]
+
+            if not ofertas:
+                layout.add_widget(
+                    Label(
+                        text="Aún no hay ofertas de mototaxistas.\nEsperando ofertas.",
+                        halign='center',
+                        valign='middle',
+                        text_size=(400, None),
+                        size_hint_y=None
+                          ))
+                return
+
+            for o in ofertas:
+                card = BoxLayout(
+                    orientation="vertical",
+                    size_hint_y=None,
+                    height=140,
+                    padding=10,
+                    spacing=5
+                )
+                card.add_widget(Label(text=f"Mototaxista: {o['mototaxista_nombre']}", color=(1,1,1,1)))
+                card.add_widget(Label(text=f"Tarifa sugerida: ${o['monto']}", color=(0,1,0,1)))
+                card.add_widget(Label(text=f"Tiempo estimado: {o['tiempo_estimado']}", color=(1,1,1,1)))
+
+                btn_box = BoxLayout(size_hint_y=None, height=40, spacing=10)
+                btn_box.add_widget(Button(
+                    text="Aceptar",
+                    background_color=(0,1,0,1),
+                    on_release=lambda x, oferta=o: self.aceptar_oferta(oferta)
+                ))
+                btn_box.add_widget(Button(
+                    text="Rechazar",
+                    background_color=(1,0,0,1),
+                    on_release=lambda x, oferta=o: self.rechazar_oferta(oferta)
+                ))
+
+                card.add_widget(btn_box)
+                layout.add_widget(card)
+
         except Exception as e:
             layout.add_widget(Label(text=f"Error de conexión: {e}"))
 
-    def aceptar_tarifa(self, viaje_id):
-        self.actualizar_estado(viaje_id, "aceptado")
-
-    def rechazar_tarifa(self, viaje_id):
-        self.actualizar_estado(viaje_id, "cancelado")
-
-    def actualizar_estado(self, viaje_id, estado):
+    def aceptar_oferta(self, oferta):
+        """El pasajero acepta una oferta y se asigna el mototaxista al viaje"""
         try:
             with open("token.txt", "r") as f:
                 token = f.read().strip()
             headers = {"Authorization": f"Bearer {token}"}
-            datos = {"estado": estado}
-            resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
 
-            if resp.status_code in [200, 202]:
-                self.ids.mensaje_tarifas.text = "✅ Estado actualizado."
-                self.cargar_tarifas()
+            oferta_id = oferta["id"]
+            resp = requests.patch(f"{API_URL}/ofertas/{oferta_id}/aceptar/", headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                viaje_id = data.get("viaje_id")
+
+                # ✅ Guardar el ID del viaje aceptado
+                with open("viaje_actual.txt", "w") as f:
+                    f.write(str(viaje_id))
+
+                self.ids.mensaje_tarifas.text = "✅ Has aceptado la oferta. Espera que el mototaxista inicie el viaje."
+
+                # 🔹 Cambiar de pantalla y mostrar detalles
+
             else:
-                self.ids.mensaje_tarifas.text = f"❌ Error: {resp.text}"
+                self.ids.mensaje_tarifas.text = f"❌ Error al aceptar: {resp.text}"
+
         except Exception as e:
-            self.ids.mensaje_tarifas.text = f"Error: {e}"
+            self.ids.mensaje_tarifas.text = f"Error de conexión: {e}"
+
+    def rechazar_oferta(self, oferta):
+        """El pasajero rechaza una oferta"""
+        try:
+            with open("token.txt", "r") as f:
+                token = f.read().strip()
+
+            headers = {"Authorization": f"Bearer {token}"}
+            oferta_id = oferta["id"]
+
+            resp = requests.delete(f"{API_URL}/ofertas/{oferta_id}/", headers=headers)
+
+            if resp.status_code in [200, 204]:
+                self.ids.mensaje_tarifas.text = "Oferta rechazada."
+                self.cargar_ofertas()
+            else:
+                self.ids.mensaje_tarifas.text = f"Error: {resp.text}"
+
+        except Exception as e:
+            self.ids.mensaje_tarifas.text = f"Error de conexión: {e}"
 
 # ==============================
 # APLICACIÓN PRINCIPAL
 # ==============================
-class KooneexApp(App):
+class KooneexApp(MDApp):
     def build(self):
+        # Registrar tipografías personalizadas
+        LabelBase.register(name="Poppins", fn_regular="fonts/Poppins-Medium.ttf")
+        LabelBase.register(name="Inter", fn_regular="fonts/Inter-Regular.ttf")
         Builder.load_file("kooneex.kv")
         sm = ScreenManager()
         sm.add_widget(LoginScreen(name="login"))
