@@ -114,17 +114,73 @@ class ViajeViewSet(viewsets.ModelViewSet):
             #Si tiene una oferta activa, mostrar solo esos viajes (para seguimiento)
             tiene_oferta_activa = Oferta.objects.filter(
                 mototaxista=user,
-                viaje__estado__in=['pendiente', 'aceptado', 'en_curso']
+                viaje__estado__in=['aceptado', 'en_curso'],
+                aceptada=True
             )
-
             if tiene_oferta_activa.exists():
                 # Solo muestra el viaje relacionado con su oferta
-                return Viaje.objects.filter(ofertas__mototaxista=user).distinct()
+                return Viaje.objects.filter(
+                ofertas__mototaxista=user,
+                ofertas__aceptada=True,
+                estado__in=['aceptado', 'en_curso']
+            ).distinct()
 
-            # 🔹 Si no tiene oferta activa, mostrar viajes pendientes
+            #Si no tiene oferta activa, mostrar viajes pendientes
             return Viaje.objects.filter(estado='pendiente').order_by('-creado_en')
 
         return Viaje.objects.none()
+    
+    @action(detail=False, methods=['get'])
+    def verificar_viajes_activos(self, request):
+        user = self.request.user
+
+        if user.rol == 'pasajero':
+            tiene_viaje_activo = Viaje.objects.filter(pasajero=user, estado__in = ['pendiente', 'aceptado', 'en_curso']).order_by('-creado_en')
+            if tiene_viaje_activo.exists():
+                estado = tiene_viaje_activo.first().estado
+                return Response({'mensaje':'tiene_viaje_activo', 'estado':estado}, status=status.HTTP_200_OK)
+            else:
+                return Response({'mensaje':'None'}, status=status.HTTP_204_NO_CONTENT)
+
+        elif user.rol == 'mototaxista':
+            tiene_oferta_activa = Oferta.objects.filter(
+                mototaxista=user,
+                viaje__estado__in=['aceptado', 'en_curso'],
+                aceptada=True
+            )
+            if tiene_oferta_activa.exists():
+                return Response({'mensaje':'tiene_viaje_activo'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'mensaje':'None'}, status=status.HTTP_204_NO_CONTENT)
+
+        return Viaje.objects.none()
+    
+    @action(detail=False, methods=['get'])
+    def verificar_viaje_ofertado(self, request):
+        user = self.request.user
+
+        if user.rol == 'pasajero':
+            tiene_viaje_activo = Viaje.objects.filter(pasajero=user, estado__in = ['pendiente', 'aceptado', 'en_curso']).order_by('-creado_en')
+            if tiene_viaje_activo.exists():
+                estado = tiene_viaje_activo.first().estado
+                return Response({'mensaje':'tiene_viaje_activo', 'estado':estado}, status=status.HTTP_200_OK)
+            else:
+                return Response({'mensaje':'None'}, status=status.HTTP_204_NO_CONTENT)
+
+        elif user.rol == 'mototaxista':
+            tiene_oferta_activa = Oferta.objects.filter(
+                mototaxista=user,
+                viaje__estado__in=['pendiente'],
+                aceptada=False
+            )
+            if tiene_oferta_activa.exists():
+                viaje_id = tiene_oferta_activa.first().viaje.pk
+                return Response({'mensaje':'tiene_viaje_ofertado', 'viaje_id':viaje_id}, status=status.HTTP_200_OK)
+            else:
+                return Response({'mensaje':'None'}, status=status.HTTP_204_NO_CONTENT)
+
+        return Viaje.objects.none()
+
 
     @action(detail=True, methods=['post'])
     def sugerir_tarifa(self, request, pk=None):
@@ -334,7 +390,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
         oferta.save()
         # Actualizar viaje
         viaje.mototaxista = oferta.mototaxista
-        viaje.tarifa_final = oferta.monto
+        viaje.costo_final = oferta.monto
         viaje.estado = 'aceptado'
         viaje.save()
 

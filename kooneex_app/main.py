@@ -2,7 +2,7 @@ import requests
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.properties import StringProperty
+from kivy.properties import StringProperty, BooleanProperty
 from kivy.core.window import Window
 from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
@@ -24,6 +24,11 @@ class LoginScreen(MDScreen):
     username = StringProperty("")
     password = StringProperty("")
     mensaje = StringProperty("")
+    show_password = BooleanProperty(False)
+
+    def toggle_password_visibility(self):
+        """Alterna entre mostrar y ocultar la contraseña."""
+        self.show_password = not self.show_password
 
     def login(self):
         datos = {"username": self.username, "password": self.password}
@@ -38,6 +43,7 @@ class LoginScreen(MDScreen):
                     f.write(access_token)
 
                 headers = {"Authorization": f"Bearer {access_token}"}
+                #obtenemos el usuario actual logeado
                 user_resp = requests.get(f"{API_URL}/usuario/", headers=headers)
 
                 if user_resp.status_code == 200:
@@ -62,26 +68,23 @@ class LoginScreen(MDScreen):
         except Exception as e:
             self.mensaje = f"Error de conexión: {e}"
 
-    # 🔍 Nueva función: verifica si el pasajero tiene viaje pendiente
+    # Verifica si el pasajero tiene viaje pendiente
     def verificar_viaje_activo(self, token):
         try:
             headers = {"Authorization": f"Bearer {token}"}
-            resp = requests.get(f"{API_URL}/viajes/", headers=headers)
-
+            resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=headers)
+            data = resp.json()
+            print(data)
             if resp.status_code == 200:
-                viajes = resp.json()
-                # Busca si hay viajes no terminados
-                activos = [
-                    v for v in viajes
-                    if v['estado'] in ['pendiente', 'aceptado']
-                ]
-
-                if activos:
-                    #Si tiene uno, va a pantalla de tarifas
-                    self.manager.current = "tarifas"
-                else:
-                    # 🟢 Si no, puede crear uno nuevo
-                    self.manager.current = "viaje"
+                if data['estado'] in ['aceptado', 'en_curso']:
+                    viaje_en_curso_screen = self.manager.get_screen("viaje_en_curso")
+                    viaje_en_curso_screen.cargar_viaje_en_curso()
+                    self.manager.current = "viaje_en_curso"
+                elif data['estado'] == 'pendiente':
+                    self.manager.current = 'tarifas'
+                    return
+            elif resp.status_code == 204:
+                self.manager.current = 'viaje'
             else:
                 print("Error al verificar viajes:", resp.text)
                 self.manager.current = "viaje"
@@ -110,7 +113,7 @@ class ViajeScreen(Screen):
 
             if resp.status_code == 200:
                 viajes = resp.json()
-                viaje_activo = next((v for v in viajes if v['estado'] in ['pendiente','aceptado']), None)
+                viaje_activo = next((v for v in viajes if v['estado'] in ['pendiente','aceptado', 'en_curso']), None)
 
                 if viaje_activo:
                     # Hay un viaje activo, redirigir al screen de viaje en curso
@@ -186,51 +189,29 @@ class PendientesScreen(Screen):
 
             # Obtener usuario autenticado
             user_info = requests.get(f"{API_URL}/usuario/", headers=headers)
-            if user_info.status_code == 200:
-                usuario = user_info.json().get("username")
-            else:
-                usuario = None
+            usuario = user_info.json().get("username") if user_info.status_code == 200 else None
 
-            # 1️ Verificar si tiene un viaje activo (aceptado o en curso)
-            resp_viajes = requests.get(f"{API_URL}/viajes/", headers=headers)
+            # 1️ Verificar si tiene un viaje activo (aceptado o en curso) con el usuario que hace la peticion
+            resp_viajes = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=headers)
             if resp_viajes.status_code == 200:
-                viajes = resp_viajes.json()
-                viaje_activo = next(
-                    (
-                        v for v in viajes
-                        if v.get("mototaxista") == usuario
-                        and v["estado"] in ["en_curso", "aceptado"]
-                    ),
-                    None
-                )
-
-                if viaje_activo:
-                    App.get_running_app().viaje_en_curso_id = viaje_activo["id"]
-                    self.manager.get_screen("viaje_en_curso_moto").cargar_viaje_en_curso()
-                    self.manager.current = "viaje_en_curso_moto"
+                self.manager.get_screen("viaje_en_curso_moto").cargar_viaje_en_curso()
+                self.manager.current = "viaje_en_curso_moto"
+                return
+            #Si no hay algun viaje aceptado o en curso
+            elif resp_viajes.status_code == 204:
+                # 2️ Verificar si el mototaxista ya envió una oferta
+                resp_ofertas = requests.get(f"{API_URL}/viajes/verificar_viaje_ofertado/", headers=headers)
+                if resp_ofertas.status_code == 200:
+                    data_resp = resp_ofertas.json()
+                    self.mostrar_espera_respuesta(data_resp.get('viaje_id', None))
                     return
+                else:
+                    print("Error al obtener ofertas:", resp_ofertas.text)
+                self.cargar_viajes_pendientes()
+                return
             else:
                 print("Error al obtener viajes:", resp_viajes.text)
 
-            # 2️ Verificar si el mototaxista ya envió una oferta
-            resp_ofertas = requests.get(f"{API_URL}/ofertas/", headers=headers)
-            if resp_ofertas.status_code == 200:
-                ofertas = resp_ofertas.json()
-                oferta_activa = next(
-                    (
-                        o for o in ofertas
-                        if o.get("mototaxista_nombre") == usuario
-                    ),
-                    None
-                )
-
-                if oferta_activa:
-                    self.mostrar_espera_respuesta(oferta_activa["viaje"])
-                    return
-            else:
-                print("Error al obtener ofertas:", resp_ofertas.text)
-
-            # 3️ Si no tiene viaje activo ni oferta, cargar viajes pendientes
             self.cargar_viajes_pendientes()
 
         except Exception as e:
@@ -249,7 +230,6 @@ class PendientesScreen(Screen):
             layout.clear_widgets()
 
             if resp.status_code == 200:
-                
                 viajes = resp.json()
                 #Obtener el nombre del usuario autenticado
                 user_info = requests.get(f"{API_URL}/usuario/", headers=headers)
@@ -269,7 +249,6 @@ class PendientesScreen(Screen):
 
                 #Filtrar viajes pendientes
                 pendientes = [v for v in viajes if v["estado"] == "pendiente"]
-
                 if not pendientes:
                     layout.add_widget(Label(text="No hay viajes pendientes.", color=(1, 1, 1, 1)))
                     return
@@ -341,7 +320,7 @@ class PendientesScreen(Screen):
             if resp.status_code in [200, 201]:
                 print("✅ Tarifa sugerida correctamente.")
                 
-                # 🔹 Bloquear botones y mostrar mensaje
+                # Bloquear botones y mostrar mensaje
                 self.mostrar_espera_respuesta(viaje_id)
 
             else:
@@ -430,16 +409,18 @@ class ViajeEnCursoScreen(Screen):
             with open("viaje_actual.txt", "r") as f:
                 viaje_id = f.read().strip()
 
-            resp = requests.get(f"{API_URL}/viajes/{viaje_id}/", headers=headers)
+            resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
             if resp.status_code == 200:
                 viaje = resp.json()
-                self.ids.info_label.text = (
-                    f"🚖 Viaje #{viaje['id']}\n"
-                    f"Mototaxista: {viaje.get('mototaxista_nombre', 'No asignado')}\n"
-                    f"Tarifa: ${viaje.get('tarifa_final', 'N/A')}\n"
-                    f"Estado: {viaje['estado']}"
-                )
+                if viaje:
+                    viaje = viaje[0]
+                    self.ids.info_label.text = (
+                        f"Viaje #{viaje['id']}\n"
+                        f"Mototaxista: {viaje.get('mototaxista').get('username', 'None')}\n"
+                        f"Tarifa:${viaje.get('costo_final')}\n"
+                        f"Estado: {viaje['estado']}"
+                    )
             else:
                 self.ids.info_label.text = "Error al cargar el viaje."
 
@@ -465,20 +446,25 @@ class ViajeEnCursoMotoScreen(Screen):
 
             if resp.status_code == 200:
                 viajes = resp.json()
-                en_curso = next((v for v in viajes if v["estado"] == "aceptado"), None)
+                aceptado = next((v for v in viajes if v["estado"] in ["aceptado", "en_curso"]), None)
 
-                if en_curso:
+                if aceptado:
                     self.ids.info_label.text = (
-                        f"Viaje #{en_curso['id']}\n"
-                        f"Pasajero: {en_curso.get('pasajero_nombre', 'No disponible')}\n"
-                        f"Destino: {en_curso.get('destino_lat', 'N/A')}, {en_curso.get('destino_lon', 'N/A')}\n"
-                        f"Tarifa: ${en_curso.get('tarifa_final', 'N/A')}\n"
-                        f"Estado: {en_curso['estado']}"
+                        f"Viaje #{aceptado['id']}\n"
+                        f"Pasajero: {aceptado.get('pasajero').get('username')}\n"
+                        f"Destino: {aceptado.get('destino_lat', 'N/A')}, {aceptado.get('destino_lon', 'N/A')}\n"
+                        f"Tarifa: ${aceptado.get('costo_final', 'N/A')}\n"
+                        f"Estado: {aceptado['estado']}"
                     )
-
+                    if aceptado['estado'] == 'en_curso':
+                        self.ids.btn_completar.disabled = False
+                        self.ids.btn_iniciar.disabled = True
+                    else:
+                        self.ids.btn_completar.disabled = True
+                        self.ids.btn_iniciar.disabled = False
                     # Guardar el ID del viaje actual en un archivo para referencia rápida
                     with open("viaje_actual.txt", "w") as f:
-                        f.write(str(en_curso["id"]))
+                        f.write(str(aceptado["id"]))
                 else:
                     self.ids.info_label.text = "No tienes viajes en curso."
             else:
@@ -551,7 +537,7 @@ class TarifaScreen(Screen):
 
             headers = {"Authorization": f"Bearer {token}"}
 
-            # 🔹 Obtener el viaje activo del pasajero
+            #Obtener el viaje activo del pasajero
             resp_viajes = requests.get(f"{API_URL}/viajes/", headers=headers)
             if resp_viajes.status_code != 200:
                 layout.add_widget(Label(text="Error al obtener viajes."))
@@ -559,7 +545,7 @@ class TarifaScreen(Screen):
 
             viajes = resp_viajes.json()
             viajes_en_curso = next(
-                (v for v in viajes if v["estado"] in ["aceptado"]),
+                (v for v in viajes if v["estado"] in ["en_curso"]),
                 None
             )
 
@@ -645,9 +631,10 @@ class TarifaScreen(Screen):
                 with open("viaje_actual.txt", "w") as f:
                     f.write(str(viaje_id))
 
-                self.ids.mensaje_tarifas.text = "✅ Has aceptado la oferta. Espera que el mototaxista inicie el viaje."
-
                 # 🔹 Cambiar de pantalla y mostrar detalles
+                viaje_en_curso_screen = self.manager.get_screen("viaje_en_curso")
+                viaje_en_curso_screen.cargar_viaje_en_curso()
+                self.manager.current = "viaje_en_curso"
 
             else:
                 self.ids.mensaje_tarifas.text = f"❌ Error al aceptar: {resp.text}"

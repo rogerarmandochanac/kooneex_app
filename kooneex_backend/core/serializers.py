@@ -45,10 +45,17 @@ class OfertaSerializer(serializers.ModelSerializer):
         read_only_fields = ['mototaxista']
 
     def get_mototaxista_nombre(self, obj):
-        if obj.mototaxista:
-            nombre = f"{obj.mototaxista.first_name} {obj.mototaxista.last_name}".strip()
-            return nombre or obj.mototaxista.username
+        # Evita fallar si obj es un dict o no tiene 'mototaxista'
+        mototaxista = getattr(obj, 'mototaxista', None)
+        if mototaxista:
+            nombre = f"{mototaxista.first_name} {mototaxista.last_name}".strip()
+            return nombre or mototaxista.username
         return None
+
+    def create(self, validated_data):
+        # Crear la instancia correctamente
+        oferta = Oferta.objects.create(**validated_data)
+        return oferta
 
 class ViajeSerializer(serializers.ModelSerializer):
     ofertas = OfertaSerializer(many=True, read_only=True)
