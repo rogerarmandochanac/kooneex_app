@@ -5,22 +5,31 @@ ScreenManager:
     TarifaScreen:
     ViajeEnCursoScreen:
 
+<LoginMDTextField@MDTextField>:
+    fill_color: 1, 1, 1, 0.25
+    text_color: 1, 1, 1, 1
+    hint_text_color: 1, 1, 1, 0.8
+    icon_right_color: 1, 1, 1, 1
+    line_color_focus: 1, 1, 1, 1
+    font_name: "Poppins"
+    mode: "fill"
+
 <LoginScreen>:
     name: "login"
     username: username.text
     password: password.text
-    show_password: False  # 🔒 Estado del campo
-    # Fondo principal
-    MDFloatLayout:
-        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
+    show_password: False #Variable para poder manejar el mostrar o ocultar la contrasena
+    background_orange_color : 0.9686, 0.5765, 0.1176, 1 #Definimos el color para todo el fondo de la app
+    font_white_color : 1, 1, 1, 1
 
+    MDFloatLayout:
+        md_bg_color: root.background_orange_color
         MDBoxLayout:
             orientation: 'vertical'
             spacing: "24dp"
             padding: "40dp"
             size_hint: 0.9, 0.7
             pos_hint: {"center_x": 0.5, "center_y": 0.5}
-
             Image:
                 source: "assets/kooneex_logo.png"
                 size_hint: (0.8, None)
@@ -28,8 +37,6 @@ ScreenManager:
                 allow_stretch: True
                 keep_ratio: True
                 pos_hint: {"center_x": 0.5}
-            
-            #Titulo
             MDLabel:
                 text: "Iniciar Sesión"
                 halign: "center"
@@ -40,33 +47,18 @@ ScreenManager:
                 bold: True
                 font_style: "H5"
                 theme_text_color: "Custom"
-                text_color: 1, 1, 1, 1
-
-            MDTextField:
+                text_color: root.font_white_color
+            LoginMDTextField:
                 id: username
                 hint_text: "Usuario"
                 icon_right: "account"
-                mode: "fill"
-                fill_color: 1, 1, 1, 0.25
-                text_color: 1, 1, 1, 1
-                hint_text_color: 1, 1, 1, 0.8
-                icon_right_color: 1, 1, 1, 1
-                line_color_focus: 1, 1, 1, 1
-                font_name: "Poppins"
-
-            MDTextField:
+                
+            LoginMDTextField:
                 id: password
                 hint_text: "Contraseña"
                 password: not root.show_password  # cambia dinámicamente
                 icon_right: "eye-off" if not root.show_password else "eye"
                 on_icon_right: root.toggle_password_visibility()
-                mode: "fill"
-                fill_color: 1, 1, 1, 0.25
-                text_color: 1, 1, 1, 1
-                hint_text_color: 1, 1, 1, 0.8
-                icon_right_color: 1, 1, 1, 1
-                line_color_focus: 1, 1, 1, 1
-                font_name: "Poppins"
 
             MDRaisedButton:
                 text: "Ingresar"
@@ -75,13 +67,12 @@ ScreenManager:
                 font_name: "Poppins"
                 pos_hint: {"center_x": 0.5}
                 on_release: root.login()
-
             MDLabel:
                 id: mensaje_label
                 text: root.mensaje
                 halign: "center"
                 theme_text_color: "Custom"
-                text_color: 1, 1, 1, 1
+                text_color: root.font_white_color
                 font_name: "Inter"
 
 <ViajeScreen>:
