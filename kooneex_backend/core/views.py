@@ -39,7 +39,7 @@ class UsuarioActualAPIView(APIView):
     def get(self, request):
         serializer = UsuarioSerializer(request.user)
         return Response(serializer.data)
-
+    
 class MototaxiViewSet(viewsets.ModelViewSet):
     queryset = Mototaxi.objects.all()
     serializer_class = MototaxiSerializer
@@ -111,6 +111,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
             return Viaje.objects.filter(pasajero=user).order_by('-creado_en')
 
         elif user.rol == 'mototaxista':
+            """Mostrara los viajes pendientes"""
             #Si tiene una oferta activa, mostrar solo esos viajes (para seguimiento)
             tiene_oferta_activa = Oferta.objects.filter(
                 mototaxista=user,
@@ -129,6 +130,11 @@ class ViajeViewSet(viewsets.ModelViewSet):
             return Viaje.objects.filter(estado='pendiente').order_by('-creado_en')
 
         return Viaje.objects.none()
+    
+    @action(detail=False, methods=['get'])
+    def obtener_estados_activos_pasajero(self, request):
+        estado = Viaje.objects.filter(pasajero=self.request.user, estado__in = ['pendiente', 'aceptado', 'en_curso']).values_list("estado", flat=True)
+        return Response({'estado':estado})
     
     @action(detail=False, methods=['get'])
     def verificar_viajes_activos(self, request):

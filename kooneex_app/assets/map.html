@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Mapa Kooneex</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html,body,#map{height:100%; margin:0; padding:0;}
+    #map{box-sizing:border-box;}
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script>
+    // Inicial: CDMX por defecto (cámbiala si quieres)
+    var map = L.map('map').setView([19.4326, -99.1332], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(map);
+
+    // Marcadores y estado en el cliente (pero Python decide primer/segundo)
+    var origenMarker = null;
+    var destinoMarker = null;
+
+    // En cada click enviamos la lat/lon al "host" (Python) usando esquema de URL
+    function enviarClick(lat, lon) {
+      // Usamos un esquema custom para que WebView lo capture: py://click?lat=..&lon=..
+      window.location = 'py://click?lat=' + lat + '&lon=' + lon;
+    }
+
+    // Maneja clicks y añade marcador temporal (Python decidirá tipo)
+    map.on('click', function(e) {
+      var lat = e.latlng.lat;
+      var lon = e.latlng.lng;
+      // Marcar temporalmente (visual feedback)
+      var temp = L.circleMarker([lat, lon], {radius:6}).addTo(map);
+      setTimeout(function(){ map.removeLayer(temp); }, 700);
+
+      enviarClick(lat, lon);
+    });
+
+    // Estas funciones son llamadas por Python (evaluateJavascript) para pintar marcadores
+    function setOrigen(lat, lon) {
+      if (origenMarker) map.removeLayer(origenMarker);
+      origenMarker = L.marker([lat, lon]).addTo(map).bindPopup('Origen').openPopup();
+    }
+    function setDestino(lat, lon) {
+      if (destinoMarker) map.removeLayer(destinoMarker);
+      destinoMarker = L.marker([lat, lon]).addTo(map).bindPopup('Destino').openPopup();
+    }
+    function clearMarkers() {
+      if (origenMarker) { map.removeLayer(origenMarker); origenMarker = null; }
+      if (destinoMarker) { map.removeLayer(destinoMarker); destinoMarker = null; }
+    }
+    function fitToMarkers() {
+      var pts = [];
+      if (origenMarker) pts.push(origenMarker.getLatLng());
+      if (destinoMarker) pts.push(destinoMarker.getLatLng());
+      if (pts.length) {
+        var bounds = L.latLngBounds(pts);
+        map.fitBounds(bounds.pad(0.25));
+      }
+    }
+  </script>
+</body>
+</html>

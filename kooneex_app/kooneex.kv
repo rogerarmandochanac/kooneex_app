@@ -67,6 +67,7 @@ ScreenManager:
                 font_name: "Poppins"
                 pos_hint: {"center_x": 0.5}
                 on_release: root.login()
+            
             MDLabel:
                 id: mensaje_label
                 text: root.mensaje
@@ -77,60 +78,59 @@ ScreenManager:
 
 <ViajeScreen>:
     name: "viaje"
+
     MDFloatLayout:
-        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
-        BoxLayout:
-            orientation: 'vertical'
-            padding: 10
-            spacing: 10
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1
 
-            Label:
-                text: "Solicitar Viaje"
-                font_size: 22
+        # --- MAPA ---
+        MapView:
+            id: mapa
+            zoom: 15
+            lat: 19.4326
+            lon: -99.1332
+            size_hint: 1, 1
+            pos_hint: {"x": 0, "y": 0}
 
-            BoxLayout:
-                id: solicitud_container
-                orientation: 'vertical'
-                spacing: 10
+        # --- CONTENEDOR DE LOS CAMPOS ---
+        MDBoxLayout:
+            orientation: "vertical"
+            size_hint: 0.9, None
+            height: dp(130)
+            spacing: dp(10)
+            pos_hint: {"top": 0.97, "center_x": 0.5}
 
-                TextInput:
-                    id: origen_lat
-                    hint_text: "Latitud de origen"
-                    input_filter: "float"
+            MDTextField:
+                id: txt_origen
+                hint_text: "Origen"
+                mode: "rectangle"
+                on_text: root.buscar_direccion(self.text, "origen")
 
-                TextInput:
-                    id: origen_lon
-                    hint_text: "Longitud de origen"
-                    input_filter: "float"
+            MDTextField:
+                id: txt_destino
+                hint_text: "Destino"
+                mode: "rectangle"
+                on_text: root.buscar_direccion(self.text, "destino")
 
-                TextInput:
-                    id: destino_lat
-                    hint_text: "Latitud de destino"
-                    input_filter: "float"
+        # --- BOTÓN SOLICITAR VIAJE ---
+        MDRaisedButton:
+            text: "Solicitar viaje"
+            size_hint: 0.6, None
+            height: dp(48)
+            pos_hint: {"center_x": 0.5, "y": 0.05}
+            md_bg_color: 0, 0.5, 0.2, 1
+            on_release: root.solicitar_viaje()
 
-                TextInput:
-                    id: destino_lon
-                    hint_text: "Longitud de destino"
-                    input_filter: "float"
-                
-                TextInput:
-                    id: cantidad_pasajeros
-                    hint_text: "Cantidad de pasajeros"
-                    input_filter: "int"
-
-                Button:
-                    text: "Solicitar viaje"
-                    on_release:root.solicitar_viaje(origen_lat.text, origen_lon.text, destino_lat.text, destino_lon.text, cantidad_pasajeros.text)
-
-            Label:
-                id: mensaje_label
-                text: ""
-                color: 1, 1, 1, 1
-                size_hint_y: None
-                height: 80
-                text_size: self.size
-                halign: "center"
-                valign: "middle"
+        # --- MENSAJE ---
+        MDLabel:
+            id: mensaje_label
+            text: root.mensaje
+            halign: "center"
+            valign: "middle"
+            size_hint_y: None
+            height: dp(30)
+            pos_hint: {"center_x": 0.5, "y": 0.01}
+            theme_text_color: "Custom"
+            text_color: 1, 1, 1, 1
 
 <ViajeEnCursoScreen>:
     name: "viaje_en_curso"
@@ -141,15 +141,18 @@ ScreenManager:
             padding: 20
             spacing: 10
 
-            Label:
+            MDLabel:
                 id: info_label
                 text: "Cargando información del viaje..."
-                color: 1, 1, 1, 1
-
-            Button:
+                theme_text_color:"Custom"
+                text_color:(1, 1, 1, 1)
+                font_style:"H6"
+                pos_hint: {"center_x": 0.5}
+            
+            MDRaisedButton:
                 text: "Marcar como completado"
-                background_color: 0, 1, 0, 1
-                size_hint_y: None
+                md_bg_color: 0.2, 0.2, 0.2, 1
+                size_hint: 1, None
                 height: 50
                 on_release: root.marcar_completado()
 
@@ -162,24 +165,28 @@ ScreenManager:
             padding: 20
             spacing: 10
 
-            Label:
+            MDLabel:
                 id: info_label
                 text: "Cargando viaje en curso..."
-                color: 1, 1, 1, 1
+                theme_text_color:"Custom"
+                text_color:(1, 1, 1, 1)
+                font_style:"H6"
+                size_hint_x: .5
+                pos_hint: {"center_x": 0.5}
 
-            Button:
+            MDRaisedButton:
                 id: btn_iniciar
                 text: "Iniciar viaje"
-                background_color: 0, 1, 0, 1
-                size_hint_y: None
-                height: 50
+                md_bg_color: (0.2, 0.2, 0.2, 1)
+                size_hint: (1, None)
+                height: 90
                 on_release: root.iniciar_viaje()
             
-            Button:
+            MDRaisedButton:
                 id: btn_completar
                 text: "Marcar como completado"
-                background_color: 0, 1, 0, 1
-                size_hint_y: None
+                md_bg_color: 0.2, 0.2, 0.2, 1
+                size_hint: 1, None
                 height: 50
                 on_release: root.marcar_completado()
 
@@ -249,3 +256,108 @@ ScreenManager:
                 size_hint_y: None
                 height: 30
                 color: 0, 1, 0, 1
+
+<ViajeCard@BoxLayout>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: "170dp"
+    padding: 10
+    spacing: 5
+
+    # Variables que Python rellenará
+    viaje_id: ""
+    usuario: ""
+    cantidad: ""
+    costo: ""
+    tarifa_textinput: tarifa_input_id
+
+    Label:
+        text: "Viaje #" + root.viaje_id
+        color: (1, 1, 0, 1)
+        font_size: "18sp"
+
+    Label:
+        text: "Usuario: " + root.usuario
+        color: (1,1,1,1)
+
+    Label:
+        text: "Pasajeros: " + root.cantidad
+        color: (1,1,1,1)
+
+    Label:
+        text: "Tarifa sugerida: $" + root.costo
+        color: (1,1,1,1)
+
+    TextInput:
+        id: tarifa_input_id
+        hint_text: "Tu tarifa"
+        multiline: False
+        size_hint_y: None
+        height: "40dp"
+        input_filter: "float"
+        text: root.costo
+
+    BoxLayout:
+        size_hint_y: None
+        height: "40dp"
+        spacing: 10
+
+        Button:
+            text: "Sugerir tarifa"
+            background_color: (0, 1, 0, 1)
+            on_release: app.root.sugerir_tarifa(root.viaje_id, tarifa_input_id.text)
+
+        Button:
+            text: "Rechazar"
+            background_color: (1, 0, 0, 1)
+            on_release: app.root.rechazar_viaje(root.viaje_id)
+
+<SelectorLugares@BoxLayout>:
+    tipo: ""
+    parent_screen: None
+    orientation: "vertical"
+    size_hint_y: None
+    height: dp(320)
+    padding: dp(20)
+    spacing: dp(15)
+
+    MDLabel:
+        text: "Seleccionar " + root.tipo
+        font_style: "H6"
+        halign: "center"
+
+    MDRaisedButton:
+        text: "Ubicación actual"
+        on_release:
+            root.parent_screen.set_lugar(root.tipo, "Ubicación actual", 19.4326, -99.1332)
+            app.root_window.children[0].dismiss()
+
+    MDRaisedButton:
+        text: "Casa"
+        on_release:
+            root.parent_screen.set_lugar(root.tipo, "Casa", 19.4326, -99.1332)
+            app.root_window.children[0].dismiss()
+
+    MDRaisedButton:
+        text: "Trabajo"
+        on_release:
+            root.parent_screen.set_lugar(root.tipo, "Trabajo", 19.44, -99.15)
+            app.root_window.children[0].dismiss()
+
+    MDRaisedButton:
+        text: "Terminal"
+        on_release:
+            root.parent_screen.set_lugar(root.tipo, "Terminal", 19.4280, -99.10)
+            app.root_window.children[0].dismiss()
+
+    MDRaisedButton:
+        text: "Centro"
+        on_release:
+            root.parent_screen.set_lugar(root.tipo, "Centro", 19.45, -99.14)
+            app.root_window.children[0].dismiss()
+
+    MDFlatButton:
+        text: "Seleccionar en el mapa"
+        on_release:
+            root.parent_screen.mensaje = "Haz clic en el mapa para elegir"
+            app.root_window.children[0].dismiss()

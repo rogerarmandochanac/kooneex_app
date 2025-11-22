@@ -2,19 +2,38 @@ import requests
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.properties import StringProperty, BooleanProperty
+from kivy.properties import StringProperty, BooleanProperty, ObjectProperty, NumericProperty
 from kivy.core.window import Window
 from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.button import Button
-from kivy.uix.textinput import TextInput
 from kivy.core.text import LabelBase
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
+from helpers import get_headers, save_headers
+from kivymd.uix.card import MDCard
+from kivymd.uix.label import MDLabel
+from kivymd.uix.button import MDRectangleFlatButton, MDRaisedButton
+from kivymd.uix.textfield import MDTextField
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivy.uix.image import Image
+from kivymd.uix.button import MDRaisedButton, MDIconButton
+from kivy.clock import mainthread
+from kivy_garden.mapview import MapView, MapMarkerPopup
+import requests
+from kivy.clock import Clock, mainthread
+from kivy_garden.mapview import MapMarker
 
 Window.size = (360, 640)
 
 API_URL = "http://127.0.0.1:8000/api"
+
+
+LUGARES = {
+    "Casa": (19.4326, -99.1332),
+    "Trabajo": (19.44, -99.15),
+    "Terminal": (19.4280, -99.10),
+    "Centro": (19.45, -99.14),
+}
 
 # ==============================
 # PANTALLA DE LOGIN
@@ -33,56 +52,49 @@ class LoginScreen(MDScreen):
         datos = {"username": self.username, "password": self.password}
         try:
             resp = requests.post(f"{API_URL}/token/", json=datos)
-            if resp.status_code == 200:
-                tokens = resp.json()
-                access_token = tokens.get("access")
+            if resp.ok:               
+                access_token = resp.json().get("access")
 
                 # Guardar token
-                with open("token.txt", "w") as f:
-                    f.write(access_token)
-
-                headers = {"Authorization": f"Bearer {access_token}"}
+                headers = save_headers(access_token)
+                
                 #obtenemos el usuario actual logeado
                 user_resp = requests.get(f"{API_URL}/usuario/", headers=headers)
 
-                if user_resp.status_code == 200:
-                    user_data = user_resp.json()
-                    rol = user_data.get("rol")
+                if resp.ok:
+                    rol = user_resp.json().get("rol")
 
-                    # Guardar rol localmente
-                    with open("rol.txt", "w") as f:
-                        f.write(rol)
-
-                    #Verificación por rol
                     if rol == "pasajero":
-                        self.verificar_viaje_activo(access_token)
+                        self.evaluar_estado_del_viaje_pasajero(access_token)
+                    
                     elif rol == "mototaxista":
                         self.manager.current = "pendientes"
+                    
                     else:
                         self.mensaje = "Rol desconocido."
+                
                 else:
                     self.mensaje = "Error al obtener usuario."
+            
             else:
                 self.mensaje = "Credenciales incorrectas"
+        
         except Exception as e:
             self.mensaje = f"Error de conexión: {e}"
 
-    # Verifica si el pasajero tiene viaje pendiente
-    def verificar_viaje_activo(self, token):
+    def evaluar_estado_del_viaje_pasajero(self, token):
         try:
-            headers = {"Authorization": f"Bearer {token}"}
-            resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=headers)
-            data = resp.json()
-            print(data)
-            if resp.status_code == 200:
-                if data['estado'] in ['aceptado', 'en_curso']:
+            resp = requests.get(f"{API_URL}/viajes/obtener_estados_activos_pasajero/", headers=get_headers())
+            estado = resp.json().get("estado")
+            if resp.ok:
+                if estado in ['aceptado', 'en_curso']:
                     viaje_en_curso_screen = self.manager.get_screen("viaje_en_curso")
                     viaje_en_curso_screen.cargar_viaje_en_curso()
                     self.manager.current = "viaje_en_curso"
-                elif data['estado'] == 'pendiente':
+                elif estado == 'pendiente':
                     self.manager.current = 'tarifas'
                     return
-            elif resp.status_code == 204:
+            elif resp.status_code == 500:
                 self.manager.current = 'viaje'
             else:
                 print("Error al verificar viajes:", resp.text)
@@ -96,23 +108,179 @@ class LoginScreen(MDScreen):
 # PANTALLA PASAJERO
 # ==============================
 class ViajeScreen(Screen):
+    mapview = ObjectProperty(None)
+    origen_seleccionado = BooleanProperty(False)
     mensaje = StringProperty("")
+    buscar_evento = None
+    origen_marker = None
+    destino_marker = None
 
+    def buscar_direccion(self, texto, tipo):
+        """Evita saturar el servidor → aplica debounce 0.4 s."""
+        if self.buscar_evento:
+            self.buscar_evento.cancel()
+
+        # esperar para que el usuario termine de escribir
+        self.buscar_evento = Clock.schedule_once(
+            lambda dt: self._ejecutar_busqueda(texto, tipo), 0.4
+        )
+
+    def _ejecutar_busqueda(self, texto, tipo):
+        if len(texto) < 3:
+            return  # no buscar texto demasiado corto
+
+        try:
+            url = "https://nominatim.openstreetmap.org/search"
+            params = {
+                "q": texto,
+                "format": "json",
+                "limit": 1
+            }
+            headers = {"User-Agent": "Kooneex-App"}
+            resp = requests.get(url, params=params, headers=headers)
+
+            if resp.status_code != 200:
+                return
+            
+            data = resp.json()
+            if not data:
+                return
+
+            lat = float(data[0]["lat"])
+            lon = float(data[0]["lon"])
+
+            self._actualizar_mapa(tipo, lat, lon)
+
+        except Exception as e:
+            print("Error buscando dirección:", e)
+
+    @mainthread
+    def _actualizar_mapa(self, tipo, lat, lon):
+        """Mover mapa y colocar marcador."""
+        self.ids.mapa.center_on(lat, lon)
+
+        if tipo == "origen":
+            if self.origen_marker:
+                self.ids.mapa.remove_widget(self.origen_marker)
+
+            self.origen_marker = MapMarker(lat=lat, lon=lon)
+            self.ids.mapa.add_widget(self.origen_marker)
+
+            self.origen_lat = lat
+            self.origen_lon = lon
+
+
+        elif tipo == "destino":
+            if self.destino_marker:
+                self.ids.mapa.remove_widget(self.destino_marker)
+
+            self.destino_marker = MapMarker(lat=lat, lon=lon)
+            self.ids.mapa.add_widget(self.destino_marker)
+
+            self.destino_lat = lat
+            self.destino_lon = lon
+
+    def on_enter(self, *args):
+        """
+        Crear mapa dentro de mapa_holder
+        """
+        if not hasattr(self, "mapa"):
+            # Crear el mapa Kivy
+            self.mapa = MapView(
+                zoom=15,
+                lat=19.4326,
+                lon=-99.1332
+            )
+
+            # Insertarlo en el contenedor definido en KV
+            # self.ids.mapa_holder.clear_widgets()
+            # self.ids.mapa_holder.add_widget(self.mapa)
+
+            # Vincular eventos
+            self.mapa.bind(on_touch_up=self._on_map_touch)
+
+        # Verificar viaje activo
+        try:
+            self.verificar_viaje_en_curso()
+        except Exception as e:
+            print("Error verificando viaje:", e)
+
+    def _on_map_touch(self, instance, touch):
+        """
+        Detectar clic real sobre el mapa.
+        """
+        # Verificar que el clic es dentro del mapa, no en el screen entero
+        if not self.mapa.collide_point(*touch.pos):
+            return False
+
+        # Solo clic izquierdo
+        if hasattr(touch, "button") and touch.button != "left":
+            return False
+
+        # Convertir coordenadas del clic a lat/lon
+        lat, lon = self.mapa.get_latlon_at(*touch.pos)
+        self._on_map_click(lat, lon)
+        return True
+
+    @mainthread
+    def _on_map_click(self, lat, lon):
+        """
+        Primer clic → ORIGEN
+        Segundo clic → DESTINO
+        """
+        # Primer clic → origen
+        if not self.origen_seleccionado:
+            self.origen_lat = lat
+            self.origen_lon = lon
+            self.origen_seleccionado = True
+            self._poner_marcador_origen(lat, lon)
+            return
+
+        # Segundo clic → destino
+        self.destino_lat = lat
+        self.destino_lon = lon
+        self._poner_marcador_destino(lat, lon)
+
+    def _poner_marcador_origen(self, lat, lon):
+        if hasattr(self, "origen_marker"):
+            self.mapa.remove_widget(self.origen_marker)
+
+        self.origen_marker = MapMarkerPopup(lat=lat, lon=lon)
+        self.mapa.add_widget(self.origen_marker)
+
+    def _poner_marcador_destino(self, lat, lon):
+        if hasattr(self, "destino_marker"):
+            self.mapa.remove_widget(self.destino_marker)
+
+        self.destino_marker = MapMarkerPopup(lat=lat, lon=lon)
+        self.mapa.add_widget(self.destino_marker)
+
+    def reiniciar_seleccion(self):
+        self.origen_seleccionado = False
+        self.origen_lat = None
+        self.origen_lon = None
+        self.destino_lat = None
+        self.destino_lon = None
+
+        # Remover marcadores
+        if hasattr(self, "origen_marker"):
+            self.mapa.remove_widget(self.origen_marker)
+        if hasattr(self, "destino_marker"):
+            self.mapa.remove_widget(self.destino_marker)
+    
     def on_pre_enter(self):
         self.verificar_viaje_en_curso()
 
     def verificar_viaje_activo(self):
         """Verifica si hay un viaje activo y redirige si existe"""
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-
-            headers = {"Authorization": f"Bearer {token}"}
+            headers = get_headers()
+            
             resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
             if resp.status_code == 200:
                 viajes = resp.json()
-                viaje_activo = next((v for v in viajes if v['estado'] in ['pendiente','aceptado', 'en_curso']), None)
+                viaje_activo = next((v for v in viajes if v['estado'] in ['aceptado', 'en_curso']), None)
 
                 if viaje_activo:
                     # Hay un viaje activo, redirigir al screen de viaje en curso
@@ -131,9 +299,8 @@ class ViajeScreen(Screen):
     
     def verificar_viaje_en_curso(self):
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-            headers = {"Authorization": f"Bearer {token}"}
+            headers = get_headers()
+
             resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
             if resp.status_code == 200:
@@ -153,43 +320,48 @@ class ViajeScreen(Screen):
             print("Error al verificar viaje en curso:", e)
 
 
-    def solicitar_viaje(self, origen_lat, origen_lon, destino_lat, destino_lon, cantidad_pasajeros):
+    def solicitar_viaje(self):
         try:
+            if not self.origen_lat or not self.origen_lon:
+                self.mensaje = "Selecciona un origen válido."
+                return
+
+            if not self.destino_lat or not self.destino_lon:
+                self.mensaje = "Selecciona un destino válido."
+                return
+
             with open("token.txt", "r") as f:
                 token = f.read().strip()
+
             headers = {"Authorization": f"Bearer {token}"}
+
             datos = {
-                "origen_lat": float(origen_lat),
-                "origen_lon": float(origen_lon),
-                "destino_lat": float(destino_lat),
-                "destino_lon": float(destino_lon),
-                "cantidad_pasajeros": int(cantidad_pasajeros)
+                "origen_lat": float(self.origen_lat),
+                "origen_lon": float(self.origen_lon),
+                "destino_lat": float(self.destino_lat),
+                "destino_lon": float(self.destino_lon),
+                "cantidad_pasajeros": int(self.ids.cantidad_pasajeros.text),
             }
 
             resp = requests.post(f"{API_URL}/viajes/", json=datos, headers=headers)
+
             if resp.status_code == 201:
                 self.manager.current = "tarifas"
             else:
-                self.ids.mensaje_label.text = f"Error: {resp.text}"
+                self.mensaje = f"Error: {resp.text}"
 
         except Exception as e:
-            self.ids.mensaje_label.text = f"Error de conexión: {e}"
+            self.mensaje = f"Error de conexión: {e}"
+
 
 # ==============================
-# PANTALLA MOTOTAXISTA DE SOLICITUD DE VIAJE
+# PANTALLA PRINCIPAL MOTOTAXISTA
 # ==============================
 class PendientesScreen(Screen):
     def on_pre_enter(self):
         """Verifica si el mototaxista ya tiene una oferta activa o un viaje en curso."""
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-            headers = {"Authorization": f"Bearer {token}"}
-
-            # Obtener usuario autenticado
-            user_info = requests.get(f"{API_URL}/usuario/", headers=headers)
-            usuario = user_info.json().get("username") if user_info.status_code == 200 else None
-
+            headers = get_headers()
             # 1️ Verificar si tiene un viaje activo (aceptado o en curso) con el usuario que hace la peticion
             resp_viajes = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=headers)
             if resp_viajes.status_code == 200:
@@ -204,8 +376,7 @@ class PendientesScreen(Screen):
                     data_resp = resp_ofertas.json()
                     self.mostrar_espera_respuesta(data_resp.get('viaje_id', None))
                     return
-                else:
-                    print("Error al obtener ofertas:", resp_ofertas.text)
+                
                 self.cargar_viajes_pendientes()
                 return
             else:
@@ -217,93 +388,126 @@ class PendientesScreen(Screen):
             print("Error al verificar estado del mototaxista:", e)
 
     def cargar_viajes_pendientes(self):
-        """Carga los viajes pendientes visibles para el mototaxista."""
+        """Carga los viajes pendientes visibles para el mototaxista con estilo KivyMD."""
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-
-            headers = {"Authorization": f"Bearer {token}"}
+            headers = get_headers()
             resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
             layout = self.ids.viajes_container
             layout.clear_widgets()
 
-            if resp.status_code == 200:
-                viajes = resp.json()
-                #Obtener el nombre del usuario autenticado
-                user_info = requests.get(f"{API_URL}/usuario/", headers=headers)
-                if user_info.status_code == 200:
-                    usuario = user_info.json().get("username")
-                else:
-                    usuario = None
-                #No mostrar nada si el mototaxista ya tiene un viaje activo
-                tiene_viaje_activo = any(
-                    v.get("mototaxista") == usuario and v["estado"] in ["en_curso", "aceptado"]
-                    for v in viajes
+            if resp.status_code != 200:
+                layout.add_widget(MDLabel(text="Error al cargar viajes.", theme_text_color="Error"))
+                return
+
+            viajes = resp.json()
+
+            if not viajes:
+                layout.add_widget(MDLabel(text="No hay viajes pendientes.", halign="center"))
+                return
+
+            for v in viajes:
+
+                card = MDCard(
+                    orientation="vertical",
+                    padding=15,
+                    spacing=10,
+                    size_hint_y=None,
+                    height=250,
+                    radius=14,
+                    md_bg_color=(0.98, 0.97, 0.95, 1),
+                    elevation=0,
+                    shadow_softness = 0,
+                    shadow_color = (0,0,0,0),
                 )
-                if tiene_viaje_activo:
-                    self.manager.get_screen("viaje_en_curso_moto").cargar_viaje_en_curso()
-                    self.manager.current = "viaje_en_curso_moto"
-                    return
 
-                #Filtrar viajes pendientes
-                pendientes = [v for v in viajes if v["estado"] == "pendiente"]
-                if not pendientes:
-                    layout.add_widget(Label(text="No hay viajes pendientes.", color=(1, 1, 1, 1)))
-                    return
+                # -------- DATOS DEL VIAJE ----------
+                # card.add_widget(MDLabel(
+                #     text=f"Viaje #{v['id']}",
+                #     theme_text_color="Custom",
+                #     text_color=(1, 0.85, 0, 1),
+                #     font_style="H6"
+                # ))
+                
+                content_container = MDBoxLayout(
+                    orientation = 'horizontal',
+                    spacing = 5,
+                )
 
-                for v in pendientes:
-                    card = BoxLayout(
-                        orientation="vertical",
-                        size_hint_y=None,
-                        height=150,
-                        padding=10,
-                        spacing=5
-                    )
-                    card.add_widget(Label(text=f"Viaje #{v['id']}", color=(1, 1, 0, 1)))
-                    card.add_widget(Label(text=f"Pasajeros: {v.get('cantidad_pasajeros', 1)}", color=(1, 1, 1, 1)))
-                    card.add_widget(Label(text=f"Tarifa sugerida: ${v.get('costo_estimado', 0)}", color=(1, 1, 1, 1)))
+                content = MDBoxLayout(
+                    orientation = "vertical",
+                    spacing = 5,
 
-                    tarifa_input = TextInput(
-                        hint_text="Tu tarifa (opcional)",
-                        input_filter="float",
-                        multiline=False,
-                        size_hint_y=None,
-                        height=40,
-                        text=str(v.get("costo_estimado", ""))
-                    )
-                    card.add_widget(tarifa_input)
+                )
 
-                    btn_box = BoxLayout(size_hint_y=None, height=40, spacing=10)
+                content.add_widget(MDLabel(
+                    text=f"Usuario: [b]{v['pasajero'].get('username')}[/b]",
+                    markup = True,
+                    theme_text_color="Secondary"
+                ))
 
-                    btn_box.add_widget(Button(
-                        text="Sugerir tarifa",
-                        background_color=(0, 1, 0, 1),
-                        on_release=lambda x, vid=v["id"], tinput=tarifa_input: self.sugerir_tarifa(vid, tinput.text)
+                content.add_widget(MDLabel(
+                    text=f"Pasajeros: [b]{v.get('cantidad_pasajeros', 1)}[/b]",
+                    markup = True,
+                    theme_text_color="Secondary"
+                ))
+
+                content.add_widget(MDLabel(
+                    text=f"Tarifa sugerida: [b]${v.get('costo_estimado', 0)}[b]",
+                    markup = True,
+                    theme_text_color="Secondary"
+                ))
+
+                content_container.add_widget(content)
+                content_container.add_widget( Image(
+                        source="assets/user_placeholder.png",
+                        allow_stretch=True,   # se adapta al contenedor
+                        keep_ratio=True,
+                        size_hint = (None, None),
+                        size = (80, 80),
                     ))
-                    btn_box.add_widget(Button(
-                        text="Rechazar",
-                        background_color=(1, 0, 0, 1),
-                        on_release=lambda x, vid=v["id"]: self.rechazar_viaje(vid)
-                    ))
+                card.add_widget(content_container)
 
-                    card.add_widget(btn_box)
-                    layout.add_widget(card)
+                # -------- CAMPO TARIFA ---------
+                tarifa_input = MDTextField(
+                    hint_text="Tu tarifa (opcional)",
+                    text=str(v.get("costo_estimado", "")),
+                    mode="rectangle",
+                    size_hint_y=None,
+                    height=60
+                )
+                card.add_widget(tarifa_input)
 
-            else:
-                layout.add_widget(Label(text="Error al cargar viajes.", color=(1, 0, 0, 1)))
+                # -------- BOTONES ----------
+                btn_box = BoxLayout(size_hint_y=None, height=55, spacing=10)
+
+                btn_box.add_widget(MDRaisedButton(
+                    text="Sugerir tarifa",
+                    md_bg_color=(0.2, 0.2, 0.2, 1),
+                    on_release=lambda x, vid=v["id"], tinput=tarifa_input:
+                        self.sugerir_tarifa(vid, tinput.text)
+                ))
+
+                btn_box.add_widget(MDRectangleFlatButton(
+                    text="Rechazar",
+                    text_color=(1, 0.2, 0.2, 1),
+                    line_color=(1, 0.2, 0.2, 1),
+                    on_release=lambda x, vid=v["id"]:
+                        self.rechazar_viaje(vid)
+                ))
+
+                card.add_widget(btn_box)
+
+                layout.add_widget(card)
 
         except Exception as e:
             layout.clear_widgets()
-            layout.add_widget(Label(text=f"Error: {e}", color=(1, 0, 0, 1)))
+            layout.add_widget(MDLabel(text=f"Error: {e}", theme_text_color="Error"))
 
     def sugerir_tarifa(self, viaje_id, tarifa):
         """El mototaxista sugiere una tarifa personalizada y bloquea otras opciones."""
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-
-            headers = {"Authorization": f"Bearer {token}"}
+            headers = get_headers()
             datos = {}
 
             if tarifa:
@@ -331,11 +535,8 @@ class PendientesScreen(Screen):
     def rechazar_viaje(self, viaje_id):
         """El mototaxista rechaza el viaje."""
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-
-            headers = {"Authorization": f"Bearer {token}"}
-            datos = {"estado": "cancelado"}
+            headers = get_headers()
+            datos = {"desicion": "rechazar"}
 
             resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
 
@@ -347,40 +548,87 @@ class PendientesScreen(Screen):
             print("Error de conexión:", e)
     
     def mostrar_espera_respuesta(self, viaje_id):
-        """Bloquea botones y muestra mensaje de espera después de sugerir tarifa."""
         layout = self.ids.viajes_container
         layout.clear_widgets()
 
-        # Crear una sola tarjeta con mensaje
-        card = BoxLayout(
+        # --- Card principal ---
+        card = MDCard(
             orientation="vertical",
             size_hint_y=None,
-            height=200,
-            padding=10,
-            spacing=5
+            height=260,
+            padding=20,
+            spacing=15,
+            radius=[0],
+            elevation=0,
+            md_bg_color=(1, 1, 1, 1),   # Blanco elegante
         )
-        card.add_widget(Label(text=f"Oferta enviada para el viaje #{viaje_id}", color=(1, 1, 0, 1)))
-        card.add_widget(Label(text="Esperando respuesta del pasajero...", color=(1, 1, 1, 1)))
 
-        # Botón para cancelar la oferta
-        cancelar_btn = Button(
-            text="Cancelar oferta",
-            background_color=(1, 0.5, 0, 1),
+        # --- Encabezado con icono ---
+        header = MDBoxLayout(
+            orientation="horizontal",
+            spacing=15,
             size_hint_y=None,
-            height=40,
-            on_release=lambda x: self.cancelar_oferta(viaje_id)
+            height=40
         )
-        card.add_widget(cancelar_btn)
 
+        header.add_widget(MDIconButton(
+        icon="clock-outline",
+        theme_text_color="Custom",
+        text_color=(0.15, 0.15, 0.15, 1),
+        disabled=True,                # Para que no parezca botón clickeable
+        icon_size="36sp"
+        ))
+
+        header.add_widget(MDLabel(
+            text=f"Oferta pendiente",
+            font_style="H6",
+            bold=True,
+            theme_text_color="Primary"
+        ))
+
+        card.add_widget(header)
+
+        # Separador elegante
+        card.add_widget(MDBoxLayout(
+        size_hint_y=None,
+        height=1,
+        md_bg_color=(0.85, 0.85, 0.85, 1)
+    ))
+
+        # --- Mensajes principales ---
+        card.add_widget(MDLabel(
+            text=f"Has enviado una oferta para el viaje #{viaje_id}.",
+            font_style="Body1",
+            theme_text_color="Primary"
+        ))
+
+        card.add_widget(MDLabel(
+            text="Esperando respuesta del pasajero...",
+            font_style="Body2",
+            theme_text_color="Secondary"
+        ))
+
+        # --- Espacio antes del botón ---
+        card.add_widget(MDLabel(text="", size_hint_y=None, height=10))
+
+        # --- Botón centrado ---
+        btn = MDRaisedButton(
+            text="Cancelar oferta",
+            md_bg_color=(0.85, 0.25, 0.15, 1),  # Rojo quemado que combina
+            text_color=(1, 1, 1, 1),
+            elevation=0,
+            pos_hint={"center_x": 0.5},
+            on_release=lambda x: self.rechazar_viaje(viaje_id)
+        )
+
+        card.add_widget(btn)
         layout.add_widget(card)
+
 
     def iniciar_viaje(self, viaje_id):
         """Inicia el viaje y pasa al screen de viaje en curso."""
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-
-            headers = {"Authorization": f"Bearer {token}"}
+            headers = get_headers()
             resp = requests.post(f"{API_URL}/viajes/{viaje_id}/iniciar/", headers=headers)
 
             if resp.status_code == 200:
@@ -401,12 +649,7 @@ class ViajeEnCursoScreen(Screen):
     def cargar_viaje_en_curso(self):
         """Carga la información del viaje en curso del pasajero"""
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-            headers = {"Authorization": f"Bearer {token}"}
-
-            with open("viaje_actual.txt", "r") as f:
-                viaje_id = f.read().strip()
+            headers = get_headers()
 
             resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
@@ -414,12 +657,12 @@ class ViajeEnCursoScreen(Screen):
                 viaje = resp.json()
                 if viaje:
                     viaje = viaje[0]
-                    self.ids.info_label.text = (
-                        f"Viaje #{viaje['id']}\n"
-                        f"Mototaxista: {viaje.get('mototaxista').get('username', 'None')}\n"
-                        f"Tarifa:${viaje.get('costo_final')}\n"
-                        f"Estado: {viaje['estado']}"
-                    )
+                    if viaje['estado'] == 'en_curso':
+                        self.ids.info_label.text = f"Viaje en curso su mototaxista {viaje.get('mototaxista').get('username')} esta en camino"
+                    else:
+                        self.ids.info_label.text = (
+                            f"Viaje {viaje['estado']} por el mototaxista {viaje.get('mototaxista').get('username')} con un costo final de ${viaje.get('costo_final')}"
+                        )
             else:
                 self.ids.info_label.text = "Error al cargar el viaje."
 
@@ -437,10 +680,8 @@ class ViajeEnCursoMotoScreen(Screen):
     def cargar_viaje_en_curso(self):
         """Carga la información del viaje actual del mototaxista"""
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
+            headers = get_headers()
 
-            headers = {"Authorization": f"Bearer {token}"}
             resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
             if resp.status_code == 200:
@@ -486,7 +727,7 @@ class ViajeEnCursoMotoScreen(Screen):
             resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
 
             if resp.status_code in [200, 202]:
-                self.ids.info_label.text = "✅ Viaje iniciado. En camino al destino."
+                self.ids.info_label.text = "Viaje iniciado. En camino al destino."
                 self.ids.btn_iniciar.disabled = True
                 self.ids.btn_completar.disabled = False
             else:
@@ -531,10 +772,7 @@ class TarifaScreen(Screen):
         layout.clear_widgets()
 
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-
-            headers = {"Authorization": f"Bearer {token}"}
+            headers = get_headers()
 
             #Obtener el viaje activo del pasajero
             resp_viajes = requests.get(f"{API_URL}/viajes/", headers=headers)
@@ -543,6 +781,7 @@ class TarifaScreen(Screen):
                 return
 
             viajes = resp_viajes.json()
+            
             viajes_en_curso = next(
                 (v for v in viajes if v["estado"] in ["en_curso"]),
                 None
@@ -584,26 +823,79 @@ class TarifaScreen(Screen):
                 return
 
             for o in ofertas:
-                card = BoxLayout(
+
+                card = MDCard(
                     orientation="vertical",
+                    padding=15,
+                    spacing=10,
                     size_hint_y=None,
-                    height=140,
-                    padding=10,
-                    spacing=5
+                    height=180,
+                    radius=14,
+                    md_bg_color=(0.98, 0.97, 0.95, 1),
+                    elevation=0,
+                    shadow_softness = 0,
+                    shadow_color = (0,0,0,0),
                 )
-                card.add_widget(Label(text=f"Mototaxista: {o['mototaxista_nombre']}", color=(1,1,1,1)))
-                card.add_widget(Label(text=f"Tarifa sugerida: ${o['monto']}", color=(0,1,0,1)))
-                card.add_widget(Label(text=f"Tiempo estimado: {o['tiempo_estimado']}", color=(1,1,1,1)))
+
+                card.add_widget(MDLabel(
+                    text = "Oferta",
+                    theme_text_color = "Custom",
+                    text_color = (1, 0.85, 0, 1)
+                ))
+
+                content_container = MDBoxLayout(
+                    orientation = 'horizontal',
+                    spacing = 5,
+                )
+
+                content = MDBoxLayout(
+                    orientation = "vertical",
+                    spacing = 5,
+
+                )
+
+                content.add_widget(MDLabel(
+                    text=f"Mototaxista: [b]{o['mototaxista_nombre']}[/b]",
+                    markup = True,
+                    theme_text_color="Secondary"
+                ))
+
+                content.add_widget(MDLabel(
+                    text=f"Tarifa sugerida: [b]{o['monto']}[/b]",
+                    markup = True,
+                    theme_text_color="Secondary"
+                ))
+
+                content.add_widget(MDLabel(
+                    text=f"Tiempo estimado: [b]{o['tiempo_estimado']}[/b]",
+                    markup = True,
+                    theme_text_color="Secondary"
+                ))
+
+                content_container.add_widget(content)
+                content_container.add_widget( Image(
+                        source="assets/user_placeholder.png",
+                        allow_stretch=True,   # se adapta al contenedor
+                        keep_ratio=True,
+                        size_hint = (None, None),
+                        size = (80, 80),
+                    ))
+                
+
+                
+                card.add_widget(content_container)
 
                 btn_box = BoxLayout(size_hint_y=None, height=40, spacing=10)
-                btn_box.add_widget(Button(
+                
+                btn_box.add_widget(MDRaisedButton(
                     text="Aceptar",
-                    background_color=(0,1,0,1),
+                    md_bg_color=(0.2, 0.2, 0.2, 1),
                     on_release=lambda x, oferta=o: self.aceptar_oferta(oferta)
                 ))
-                btn_box.add_widget(Button(
+                btn_box.add_widget(MDRectangleFlatButton(
                     text="Rechazar",
-                    background_color=(1,0,0,1),
+                    text_color=(1, 0.2, 0.2, 1),
+                    line_color=(1, 0.2, 0.2, 1),
                     on_release=lambda x, oferta=o: self.rechazar_oferta(oferta)
                 ))
 
