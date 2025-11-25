@@ -87,15 +87,16 @@ class LoginScreen(MDScreen):
             resp = requests.get(f"{API_URL}/viajes/obtener_estados_activos_pasajero/", headers=get_headers())
             estado = resp.json().get("estado")
             if resp.ok:
-                if estado in ['aceptado', 'en_curso']:
+                if estado[0] in ['aceptado', 'en_curso']:
                     viaje_en_curso_screen = self.manager.get_screen("viaje_en_curso")
                     viaje_en_curso_screen.cargar_viaje_en_curso()
                     self.manager.current = "viaje_en_curso"
-                elif estado == 'pendiente':
+                elif estado[0] == 'pendiente':
                     self.manager.current = 'tarifas'
                     return
-            elif resp.status_code == 500:
-                self.manager.current = 'viaje'
+                else:
+                    self.manager.current = 'viaje'
+                    return
             else:
                 print("Error al verificar viajes:", resp.text)
                 self.manager.current = "viaje"
