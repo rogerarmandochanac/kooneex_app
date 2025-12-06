@@ -65,10 +65,10 @@ class LoginScreen(MDScreen):
                     rol = user_resp.json().get("rol")
 
                     if rol == "pasajero":
-                        self.evaluar_viaje(access_token)
+                        self.evaluar_viaje_pasajero()
                     
                     elif rol == "mototaxista":
-                        self.manager.current = "pendientes"
+                        self.evaluar_viaje_mototaxista()
                     
                     else:
                         self.mensaje = "Rol desconocido."
@@ -82,22 +82,20 @@ class LoginScreen(MDScreen):
         except Exception as e:
             self.mensaje = f"Error de conexión: {e}"
 
-    def evaluar_viaje(self, token):
+    def evaluar_viaje_pasajero(self):
         try:
-            resp = requests.get(f"{API_URL}/viajes/estado_viaje_activo/", headers=get_headers())
-            estado = resp.json().get("estado")
+            resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=get_headers())
+            data = resp.json()
             if resp.ok:
-                if estado == 'en_curso':
+                if data.get("mensaje") == "tiene_viaje_activo":
                     viaje_en_curso = self.manager.get_screen("viaje_en_curso")
                     viaje_en_curso.cargar_viaje_en_curso()
                     self.manager.current = "viaje_en_curso"
-                elif estado in ['aceptado']:
-                    viaje_en_curso_screen = self.manager.get_screen("viaje_en_curso")
-                    viaje_en_curso_screen.cargar_viaje_en_curso()
-                    self.manager.current = "viaje_en_curso"
-                elif estado == 'pendiente':
+                
+                elif data.get("mensaje") == 'tiene_viaje_pendiente':
                     self.manager.current = 'tarifas'
                     return
+                
                 elif estado == None:
                     self.manager.current = "viaje"
             else:
@@ -107,6 +105,35 @@ class LoginScreen(MDScreen):
         except Exception as e:
             print("Error al verificar viaje activo:", e)
             self.manager.current = "viaje"
+    
+    def evaluar_viaje_mototaxista(self):
+        try:
+            resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=get_headers())
+            data = resp.json()
+            if resp.ok:
+                if data.get("mensaje") == "tiene_viaje_activo":
+                    self.manager.get_screen("viaje_en_curso_moto").cargar_viaje_en_curso()
+                    self.manager.current = "viaje_en_curso_moto"
+                    return
+                elif data.get("mensaje") == "tiene_viaje_ofertado":
+                    self.manager.get_screen("pendientes").mostrar_espera_respuesta(data.get('viaje_id', None))
+                    self.manager.current = "pendientes"
+                    return
+
+                elif data.get("mensaje") == 'None': 
+                    self.manager.get_screen('pendientes').cargar_viajes_pendientes() 
+                    self.manager.current = "pendientes"
+                    return
+                else:
+                    print("Error al obtener viajes:", resp_viajes.text)
+                    self.manager.get_screen('pendientes').cargar_viajes_pendientes() 
+                    self.manager.current = "pendientes"
+            
+            else:
+                print("Error al obtener viajes:", resp_viajes.text)
+                
+        except Exception as e:
+            print("Error al verificar estado del mototaxista:", e)
 
 # ==============================
 # PANTALLA PASAJERO
@@ -312,37 +339,7 @@ class ViajeScreen(Screen):
 # PANTALLA PRINCIPAL MOTOTAXISTA
 # ==============================
 class PendientesScreen(Screen):
-    def on_pre_enter(self):
-        """Verifica si el mototaxista ya tiene una oferta activa o un viaje en curso."""
-        try:
-            headers = get_headers()
-            # 1️ Verificar si tiene un viaje activo (aceptado o en curso) con el usuario que hace la peticion
-            resp_viajes = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=headers)
-            data = resp_viajes.json()
-            if data.get("mensaje") == "tiene_viaje_activo":
-                self.manager.get_screen("viaje_en_curso_moto").cargar_viaje_en_curso()
-                self.manager.current = "viaje_en_curso_moto"
-                return
-            #Si no hay algun viaje aceptado o en curso
-            elif data.get("mensaje") == "tiene_viaje_ofertado":
-                # 2️ Verificar si el mototaxista ya envió una oferta
-                self.mostrar_espera_respuesta(data.get('viaje_id', None))
-                return
-
-            elif data.get("mensaje") == 'None':   
-                self.cargar_viajes_pendientes()
-                return
-            
-            else:
-                print("Error al obtener viajes:", resp_viajes.text)
-
-            self.cargar_viajes_pendientes()
-
-        except Exception as e:
-            print("Error al verificar estado del mototaxista:", e)
-
     def cargar_viajes_pendientes(self):
-        """Carga los viajes pendientes visibles para el mototaxista con estilo KivyMD."""
         try:
             headers = get_headers()
             resp = requests.get(f"{API_URL}/viajes/", headers=headers)

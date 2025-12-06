@@ -181,7 +181,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
         if user.rol == 'pasajero':
             viaje_activo = Viaje.objects.filter(
                 pasajero=user,
-                estado__in=['pendiente', 'aceptado', 'en_curso']
+                estado__in=['aceptado', 'en_curso']
             ).only('id', 'estado').first()
             
             if viaje_activo:
@@ -190,6 +190,20 @@ class ViajeViewSet(viewsets.ModelViewSet):
                     'estado': viaje_activo.estado,
                     'viaje_id': viaje_activo.id
                 }, status=status.HTTP_200_OK)
+            
+            viaje_pendiente = Viaje.objects.filter(
+                pasajero=user,
+                estado__in=['pendiente']
+            ).only('id', 'estado').first()
+
+            if viaje_pendiente:
+                return Response({
+                    'mensaje': 'tiene_viaje_pendiente', 
+                    'estado': viaje_pendiente.estado,
+                    'viaje_id': viaje_pendiente.id
+                }, status=status.HTTP_200_OK)
+
+            return Response({'mensaje': 'None'}, status=status.HTTP_204_NO_CONTENT)
         
         elif user.rol == 'mototaxista':
             # Verificar si tiene viaje aceptado o en curso
