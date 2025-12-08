@@ -5,6 +5,7 @@ from .models import (Usuario,
                      Pago, 
                      Oferta
                      )
+from math import radians, sin, cos, sqrt, atan2
 
 class UsuarioSerializer(serializers.ModelSerializer):
     nombre_completo = serializers.CharField(read_only=True)
@@ -76,15 +77,34 @@ class ViajeSerializer(serializers.ModelSerializer):
     mototaxista_nombre = serializers.SerializerMethodField()
     ofertas_count = serializers.SerializerMethodField()
     ofertas = OfertaSerializer(many=True, read_only=True)
+    distancia_km = serializers.SerializerMethodField()
 
     class Meta:
         model = Viaje
         fields = [
             'id', 'origen_lat', 'origen_lon', 'destino_lat', 'destino_lon',
             'cantidad_pasajeros', 'costo_estimado', 'costo_final', 'estado',
-            'creado_en', 'pasajero_nombre', 'mototaxista_nombre', 'ofertas_count', 'ofertas'
+            'creado_en', 'pasajero_nombre', 'mototaxista_nombre', 'ofertas_count', 'ofertas', 
+            'distancia_km',
         ]
         read_only_fields = ['pasajero']
+    
+    def get_distancia_km(self, obj):
+        if not obj.origen_lat or not obj.origen_lon or not obj.destino_lat or not obj.destino_lon:
+            return None
+        return self._haversine(obj.origen_lat, obj.origen_lon, obj.destino_lat, obj.destino_lon)
+
+    # Fórmula de Haversine
+    def _haversine(self, lat1, lon1, lat2, lon2):
+        R = 6371  # Radio de la Tierra en km
+
+        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+
+        a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return round(R * c, 2)  # Redondeado a 2 decimales
     
     def get_pasajero_nombre(self, obj):
         return obj.pasajero.username

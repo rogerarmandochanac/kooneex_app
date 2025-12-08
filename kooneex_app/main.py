@@ -12,28 +12,17 @@ from kivymd.uix.screen import MDScreen
 from helpers import get_headers, save_headers
 from kivymd.uix.card import MDCard
 from kivymd.uix.label import MDLabel
-from kivymd.uix.button import MDRectangleFlatButton, MDRaisedButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivy.uix.image import Image
-from kivymd.uix.button import MDRaisedButton, MDIconButton
-from kivy.clock import mainthread
+from kivymd.uix.button import MDRaisedButton, MDIconButton, MDRectangleFlatButton
 from kivy_garden.mapview import MapView, MapMarkerPopup
-import requests
 from kivy.clock import Clock, mainthread
 from kivy_garden.mapview import MapMarker
 
 Window.size = (360, 640)
 
 API_URL = "http://127.0.0.1:8000/api"
-
-
-LUGARES = {
-    "Casa": (19.4326, -99.1332),
-    "Trabajo": (19.44, -99.15),
-    "Terminal": (19.4280, -99.10),
-    "Centro": (19.45, -99.14),
-}
 
 # ==============================
 # PANTALLA DE LOGIN
@@ -44,20 +33,15 @@ class LoginScreen(MDScreen):
     mensaje = StringProperty("")
     show_password = BooleanProperty(False)
 
-    def toggle_password_visibility(self):
-        """Alterna entre mostrar y ocultar la contraseña."""
-        self.show_password = not self.show_password
-
     def login(self):
         datos = {"username": self.username, "password": self.password}
         try:
             resp = requests.post(f"{API_URL}/token/", json=datos)
+            
             if resp.ok:               
                 access_token = resp.json().get("access")
-
                 # Guardar token
                 headers = save_headers(access_token)
-                
                 #obtenemos el usuario actual logeado
                 user_resp = requests.get(f"{API_URL}/usuario/", headers=headers)
 
@@ -135,6 +119,8 @@ class LoginScreen(MDScreen):
         except Exception as e:
             print("Error al verificar estado del mototaxista:", e)
 
+from kivy_garden.mapview import MapSource
+
 # ==============================
 # PANTALLA PASAJERO
 # ==============================
@@ -145,6 +131,10 @@ class ViajeScreen(Screen):
     buscar_evento = None
     origen_marker = None
     destino_marker = None
+    origen_lat = None
+    origen_lon = None
+    destino_lat = None
+    destino_lon = None
 
     #========================
     #MAPA Y GEOLOCALIZACION
@@ -219,20 +209,21 @@ class ViajeScreen(Screen):
         """
         Crear mapa dentro de mapa_holder
         """
+
         if not hasattr(self, "mapa"):
             # Crear el mapa Kivy
             self.mapa = MapView(
                 zoom=15,
                 lat=19.4326,
-                lon=-99.1332
+                lon=-99.1332,
+                map_source="osm"
             )
 
-            # Insertarlo en el contenedor definido en KV
-            # self.ids.mapa_holder.clear_widgets()
-            # self.ids.mapa_holder.add_widget(self.mapa)
 
-            # Vincular eventos
             self.mapa.bind(on_touch_up=self._on_map_touch)
+
+            if hasattr(self, 'ids') and 'mapa_holder' in self.ids:
+                self.ids.mapa_holder.add_widget(self.mapa)
 
     def _on_map_touch(self, instance, touch):
         """
@@ -311,17 +302,14 @@ class ViajeScreen(Screen):
                 self.mensaje = "Selecciona un destino válido."
                 return
 
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-
-            headers = {"Authorization": f"Bearer {token}"}
+            headers = get_headers()
 
             datos = {
                 "origen_lat": float(self.origen_lat),
                 "origen_lon": float(self.origen_lon),
                 "destino_lat": float(self.destino_lat),
                 "destino_lon": float(self.destino_lon),
-                "cantidad_pasajeros": int(self.ids.cantidad_pasajeros.text),
+                "cantidad_pasajeros": int(self.ids.txt_cantidad_pasajeros.text),
             }
 
             resp = requests.post(f"{API_URL}/viajes/", json=datos, headers=headers)
@@ -352,13 +340,11 @@ class PendientesScreen(Screen):
                 return
 
             viajes = resp.json()
-
             if not viajes:
                 layout.add_widget(MDLabel(text="No hay viajes pendientes.", halign="center"))
                 return
 
             for v in viajes:
-
                 card = MDCard(
                     orientation="vertical",
                     padding=15,
@@ -371,14 +357,6 @@ class PendientesScreen(Screen):
                     shadow_softness = 0,
                     shadow_color = (0,0,0,0),
                 )
-
-                # -------- DATOS DEL VIAJE ----------
-                # card.add_widget(MDLabel(
-                #     text=f"Viaje #{v['id']}",
-                #     theme_text_color="Custom",
-                #     text_color=(1, 0.85, 0, 1),
-                #     font_style="H6"
-                # ))
                 
                 content_container = MDBoxLayout(
                     orientation = 'horizontal',
@@ -392,7 +370,7 @@ class PendientesScreen(Screen):
                 )
 
                 content.add_widget(MDLabel(
-                    text=f"Usuario: [b]{v['pasajero'].get('username')}[/b]",
+                    text=f"Usuario: [b]{v['pasajero_nombre']}[/b]",
                     markup = True,
                     theme_text_color="Secondary"
                 ))
@@ -405,6 +383,12 @@ class PendientesScreen(Screen):
 
                 content.add_widget(MDLabel(
                     text=f"Tarifa sugerida: [b]${v.get('costo_estimado', 0)}[b]",
+                    markup = True,
+                    theme_text_color="Secondary"
+                ))
+
+                content.add_widget(MDLabel(
+                    text=f"Distancia: [b]{v.get('distancia_km', 0)}[b] km",
                     markup = True,
                     theme_text_color="Secondary"
                 ))
@@ -455,6 +439,7 @@ class PendientesScreen(Screen):
             layout.clear_widgets()
             layout.add_widget(MDLabel(text=f"Error: {e}", theme_text_color="Error"))
 
+    
     def sugerir_tarifa(self, viaje_id, tarifa):
         """El mototaxista sugiere una tarifa personalizada y bloquea otras opciones."""
         try:

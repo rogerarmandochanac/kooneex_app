@@ -95,7 +95,7 @@ ScreenManager:
         MDBoxLayout:
             orientation: "vertical"
             size_hint: 0.9, None
-            height: dp(130)
+            height: dp(180)
             spacing: dp(10)
             pos_hint: {"top": 0.97, "center_x": 0.5}
 
@@ -110,8 +110,14 @@ ScreenManager:
                 hint_text: "Destino"
                 mode: "rectangle"
                 on_text: root.buscar_direccion(self.text, "destino")
+            
+            
+            MDTextField:
+                id: txt_cantidad_pasajeros
+                hint_text: "No. Pasajeros"
+                text: "1"
+                mode: "rectangle"
 
-        # --- BOTÓN SOLICITAR VIAJE ---
         MDRaisedButton:
             text: "Solicitar viaje"
             size_hint: 0.6, None
@@ -312,53 +318,3 @@ ScreenManager:
             text: "Rechazar"
             background_color: (1, 0, 0, 1)
             on_release: app.root.rechazar_viaje(root.viaje_id)
-
-<SelectorLugares@BoxLayout>:
-    tipo: ""
-    parent_screen: None
-    orientation: "vertical"
-    size_hint_y: None
-    height: dp(320)
-    padding: dp(20)
-    spacing: dp(15)
-
-    MDLabel:
-        text: "Seleccionar " + root.tipo
-        font_style: "H6"
-        halign: "center"
-
-    MDRaisedButton:
-        text: "Ubicación actual"
-        on_release:
-            root.parent_screen.set_lugar(root.tipo, "Ubicación actual", 19.4326, -99.1332)
-            app.root_window.children[0].dismiss()
-
-    MDRaisedButton:
-        text: "Casa"
-        on_release:
-            root.parent_screen.set_lugar(root.tipo, "Casa", 19.4326, -99.1332)
-            app.root_window.children[0].dismiss()
-
-    MDRaisedButton:
-        text: "Trabajo"
-        on_release:
-            root.parent_screen.set_lugar(root.tipo, "Trabajo", 19.44, -99.15)
-            app.root_window.children[0].dismiss()
-
-    MDRaisedButton:
-        text: "Terminal"
-        on_release:
-            root.parent_screen.set_lugar(root.tipo, "Terminal", 19.4280, -99.10)
-            app.root_window.children[0].dismiss()
-
-    MDRaisedButton:
-        text: "Centro"
-        on_release:
-            root.parent_screen.set_lugar(root.tipo, "Centro", 19.45, -99.14)
-            app.root_window.children[0].dismiss()
-
-    MDFlatButton:
-        text: "Seleccionar en el mapa"
-        on_release:
-            root.parent_screen.mensaje = "Haz clic en el mapa para elegir"
-            app.root_window.children[0].dismiss()

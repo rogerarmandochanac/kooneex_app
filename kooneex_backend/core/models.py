@@ -71,6 +71,7 @@ class Viaje(models.Model):
                                    related_name='viajes_mototaxista')
     origen_lat = models.FloatField()
     origen_lon = models.FloatField()
+    #origen_desc = models.CharField(max_length=50, null=True, blank=True)
     destino_lat = models.FloatField()
     destino_lon = models.FloatField()
     cantidad_pasajeros = models.PositiveIntegerField(default=1)

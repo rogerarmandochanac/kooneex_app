@@ -146,7 +146,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
                 return queryset.filter(tiene_oferta_activa=True, estado__in=['aceptado', 'en_curso'])
             
             # Si no, mostrar viajes pendientes
-            return queryset.filter(estado='pendiente').order_by('-creado_en')
+            return queryset.filter(estado='pendiente').order_by('-distancia_km')
         
         return Viaje.objects.none()
     
@@ -230,33 +230,29 @@ class ViajeViewSet(viewsets.ModelViewSet):
                     'mensaje': 'tiene_viaje_ofertado',
                     'viaje_id': oferta_pendiente.viaje.id
                 }, status=status.HTTP_200_OK)
+            
+            else:
+                return Response({
+                    'mensaje':'None',
+                }, status=status.HTTP_200_OK)
         
         return Response({'mensaje': 'None'}, status=status.HTTP_204_NO_CONTENT)
 
     def perform_create(self, serializer):
-        """Creación optimizada"""
+        print(self.request.data)
+        
         pasajero = self.request.user
-        
-        # Validar que no tenga viajes activos
-        if Viaje.objects.filter(
-            pasajero=pasajero,
-            estado__in=['pendiente', 'aceptado', 'en_curso']
-        ).exists():
-            raise serializers.ValidationError(
-                "Ya tienes un viaje activo. Completa o cancela antes de solicitar otro."
-            )
-        
+                    
         cantidad = int(self.request.data.get('cantidad_pasajeros', 1))
-        
-        # Calcular costo estimado basado en distancia
         origen_lat = float(self.request.data.get('origen_lat'))
         origen_lon = float(self.request.data.get('origen_lon'))
         destino_lat = float(self.request.data.get('destino_lat'))
         destino_lon = float(self.request.data.get('destino_lon'))
         
         distancia = calcular_distancia(origen_lat, origen_lon, destino_lat, destino_lon)
-        costo_base = max(20, distancia * 8)  # $8 por km, mínimo $20
-        costo_estimado = costo_base + (max(0, cantidad - 1) * 5)  # $5 por pasajero extra
+        costo_base = 10
+        comision = 1
+        costo_estimado = (costo_base * cantidad) + comision
         
         serializer.save(
             pasajero=pasajero,
