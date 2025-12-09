@@ -31,6 +31,8 @@ from rest_framework import (viewsets,
 
 from django.db.models import Q
 
+from django.db import transaction
+
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer

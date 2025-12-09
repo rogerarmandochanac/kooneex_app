@@ -107,9 +107,10 @@ ScreenManager:
 
             MDTextField:
                 id: txt_destino
-                hint_text: "Destino"
+                hint_text: "Selecciona el destino"
+                readonly: True
                 mode: "rectangle"
-                on_text: root.buscar_direccion(self.text, "destino")
+                on_focus: if self.focus: root.abrir_lista_destinos()
             
             
             MDTextField:

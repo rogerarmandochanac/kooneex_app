@@ -20,6 +20,9 @@ from kivy_garden.mapview import MapView, MapMarkerPopup
 from kivy.clock import Clock, mainthread
 from kivy_garden.mapview import MapMarker, MapSource
 from plyer import gps
+from kivymd.uix.menu import MDDropdownMenu
+from kivymd.uix.list import OneLineListItem
+from kivy.metrics import dp
 
 Window.size = (360, 640)
 
@@ -27,6 +30,21 @@ API_URL = "http://127.0.0.1:8000/api"
 
 DEFAULT_LAT = 20.1373
 DEFAULT_LON = -90.1749
+
+DESTINOS_PREDEFINIDOS = {
+    "Pomuch Centro": (20.13730, -90.17490),
+    "Pomuch Soledad": (20.145780, -90.173459),
+    "Pomuch Nueva": (20.144052896584597, -90.17682172260673),
+    "Pomuch San Francisco": (20.146953764112478, -90.16952611440409),
+    "Pomuch Villa Lucrecia": (20.14155488415286, -90.16592122564514),
+    "Pomuch San Diego": (20.141151975180843, -90.17287351110882),
+    "Pomuch Santa Cristina": (20.135914063988263, -90.16540624153673),
+    "Pomuch San pedro I": (20.13285181919244, -90.17321683384776),
+    "Pomuch San pedro II": (20.12680773892196, -90.17690755329146),
+    "Pomuch Benito Juarez": (20.12962833879734, -90.1786241669862),
+    "Pomuch Hacienda Dzodzil": (20.16802372650526, -90.23085213931239),
+}
+
 
 class LoginScreen(MDScreen):
     username = StringProperty("")
@@ -132,6 +150,7 @@ class ViajeScreen(Screen):
     origen_lon = None
     destino_lat = None
     destino_lon = None
+    menu_destinos = None
 
     # ============================================================
     # BUSCAR DIRECCIÓN (DEBOUNCE)
@@ -265,6 +284,47 @@ class ViajeScreen(Screen):
         self.origen_lat = lat
         self.origen_lon = lon
         print("Ubicación final:", lat, lon)
+    
+    def abrir_lista_destinos(self):
+        # Cerrar menú previo si existía
+        if self.menu_destinos:
+            self.menu_destinos.dismiss()
+
+        # Construir items del menú
+        items = []
+        for nombre, (lat, lon) in DESTINOS_PREDEFINIDOS.items():
+            items.append({
+                "viewclass": "OneLineListItem",
+                "text": nombre,
+                "height": dp(48),
+                "on_release": lambda nombre=nombre, lat=lat, lon=lon:
+                    self.seleccionar_destino_predefinido(nombre, lat, lon)
+            })
+
+        # Crear menú
+        self.menu_destinos = MDDropdownMenu(
+            caller=self.ids.txt_destino,
+            items=items,
+            width_mult=4,
+            max_height=dp(200),
+        )
+        self.menu_destinos.open()
+    
+    def seleccionar_destino_predefinido(self, nombre, lat, lon):
+        if self.menu_destinos:
+            self.menu_destinos.dismiss()
+
+        # Rellenar el campo
+        self.ids.txt_destino.text = nombre
+
+        # Guardar coordenadas
+        self.destino_lat = lat
+        self.destino_lon = lon
+
+        # Marcar en el mapa
+        self._actualizar_mapa("destino", lat, lon)
+
+        print("Destino marcado:", nombre, lat, lon)
 
     # ============================================================
     # REINICIAR
@@ -587,15 +647,15 @@ class ViajeEnCursoScreen(Screen):
 
             resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
-            if resp.status_code == 200:
+            if resp.ok:
                 viaje = resp.json()
                 if viaje:
                     viaje = viaje[0]
                     if viaje['estado'] == 'en_curso':
-                        self.ids.info_label.text = f"Viaje en curso su mototaxista {viaje.get('mototaxista').get('username')} esta en camino"
+                        self.ids.info_label.text = f"Viaje en curso su mototaxista {viaje.get('mototaxista_nombre')} esta en camino"
                     else:
                         self.ids.info_label.text = (
-                            f"Viaje {viaje['estado']} por el mototaxista {viaje.get('mototaxista').get('username')} con un costo final de ${viaje.get('costo_final')}"
+                            f"Viaje {viaje['estado']} por el mototaxista {viaje.get('mototaxista_nombre')} con un costo final de ${viaje.get('costo_final')}"
                         )
             else:
                 self.ids.info_label.text = "Error al cargar el viaje."
@@ -618,14 +678,14 @@ class ViajeEnCursoMotoScreen(Screen):
 
             resp = requests.get(f"{API_URL}/viajes/", headers=headers)
 
-            if resp.status_code == 200:
+            if resp.ok:
                 viajes = resp.json()
                 aceptado = next((v for v in viajes if v["estado"] in ["aceptado", "en_curso"]), None)
 
                 if aceptado:
                     self.ids.info_label.text = (
                         f"Viaje #{aceptado['id']}\n"
-                        f"Pasajero: {aceptado.get('pasajero').get('username')}\n"
+                        f"Pasajero: {aceptado.get('pasajero_nombre')}\n"
                         f"Destino: {aceptado.get('destino_lat', 'N/A')}, {aceptado.get('destino_lon', 'N/A')}\n"
                         f"Tarifa: ${aceptado.get('costo_final', 'N/A')}\n"
                         f"Estado: {aceptado['estado']}"
