@@ -18,15 +18,16 @@ from kivy.uix.image import Image
 from kivymd.uix.button import MDRaisedButton, MDIconButton, MDRectangleFlatButton
 from kivy_garden.mapview import MapView, MapMarkerPopup
 from kivy.clock import Clock, mainthread
-from kivy_garden.mapview import MapMarker
+from kivy_garden.mapview import MapMarker, MapSource
+from plyer import gps
 
 Window.size = (360, 640)
 
 API_URL = "http://127.0.0.1:8000/api"
 
-# ==============================
-# PANTALLA DE LOGIN
-# ==============================
+DEFAULT_LAT = 20.1373
+DEFAULT_LON = -90.1749
+
 class LoginScreen(MDScreen):
     username = StringProperty("")
     password = StringProperty("")
@@ -40,9 +41,7 @@ class LoginScreen(MDScreen):
             
             if resp.ok:               
                 access_token = resp.json().get("access")
-                # Guardar token
                 headers = save_headers(access_token)
-                #obtenemos el usuario actual logeado
                 user_resp = requests.get(f"{API_URL}/usuario/", headers=headers)
 
                 if resp.ok:
@@ -119,16 +118,14 @@ class LoginScreen(MDScreen):
         except Exception as e:
             print("Error al verificar estado del mototaxista:", e)
 
-from kivy_garden.mapview import MapSource
-
-# ==============================
-# PANTALLA PASAJERO
-# ==============================
 class ViajeScreen(Screen):
     mapview = ObjectProperty(None)
+
     origen_seleccionado = BooleanProperty(False)
     mensaje = StringProperty("")
     buscar_evento = None
+
+    # Marcadores y coordenadas
     origen_marker = None
     destino_marker = None
     origen_lat = None
@@ -136,37 +133,31 @@ class ViajeScreen(Screen):
     destino_lat = None
     destino_lon = None
 
-    #========================
-    #MAPA Y GEOLOCALIZACION
-    #========================
-
+    # ============================================================
+    # BUSCAR DIRECCIÓN (DEBOUNCE)
+    # ============================================================
     def buscar_direccion(self, texto, tipo):
-        """Evita saturar el servidor → aplica debounce 0.4 s."""
+        """Aplica debounce para evitar bombardear al servidor."""
         if self.buscar_evento:
             self.buscar_evento.cancel()
 
-        # esperar para que el usuario termine de escribir
         self.buscar_evento = Clock.schedule_once(
             lambda dt: self._ejecutar_busqueda(texto, tipo), 0.8
         )
 
     def _ejecutar_busqueda(self, texto, tipo):
         if len(texto) < 3:
-            return  # no buscar texto demasiado corto
+            return
 
         try:
             url = "https://nominatim.openstreetmap.org/search"
-            params = {
-                "q": texto,
-                "format": "json",
-                "limit": 1
-            }
+            params = {"q": texto, "format": "json", "limit": 1}
             headers = {"User-Agent": "Kooneex-App"}
-            resp = requests.get(url, params=params, headers=headers)
 
+            resp = requests.get(url, params=params, headers=headers)
             if resp.status_code != 200:
                 return
-            
+
             data = resp.json()
             if not data:
                 return
@@ -179,139 +170,147 @@ class ViajeScreen(Screen):
         except Exception as e:
             print("Error buscando dirección:", e)
 
+    # ============================================================
+    # ACTUALIZAR MAPA Y MARCADORES
+    # ============================================================
     @mainthread
     def _actualizar_mapa(self, tipo, lat, lon):
-        """Mover mapa y colocar marcador."""
-        self.ids.mapa.center_on(lat, lon)
+        mapa = self.ids.mapa
+        mapa.center_on(lat, lon)
 
         if tipo == "origen":
             if self.origen_marker:
-                self.ids.mapa.remove_widget(self.origen_marker)
+                mapa.remove_widget(self.origen_marker)
 
             self.origen_marker = MapMarker(lat=lat, lon=lon)
-            self.ids.mapa.add_widget(self.origen_marker)
+            mapa.add_widget(self.origen_marker)
 
             self.origen_lat = lat
             self.origen_lon = lon
 
-
         elif tipo == "destino":
             if self.destino_marker:
-                self.ids.mapa.remove_widget(self.destino_marker)
+                mapa.remove_widget(self.destino_marker)
 
             self.destino_marker = MapMarker(lat=lat, lon=lon)
-            self.ids.mapa.add_widget(self.destino_marker)
+            mapa.add_widget(self.destino_marker)
 
             self.destino_lat = lat
             self.destino_lon = lon
 
+    # ============================================================
+    # GPS
+    # ============================================================
     def on_enter(self, *args):
-        """
-        Crear mapa dentro de mapa_holder
-        """
+        self.obtener_ubicacion()
 
-        if not hasattr(self, "mapa"):
-            # Crear el mapa Kivy
-            self.mapa = MapView(
-                zoom=15,
-                lat=19.4326,
-                lon=-99.1332,
-                map_source="osm"
-            )
+    def obtener_ubicacion(self):
+        try:
+            # Solo Android tiene GPS funcional
+            if platform.system().lower() != "android":
+                raise Exception("GPS no disponible fuera de Android")
+                
+            gps.configure(on_location=self.on_location, on_status=self.on_status)
+            gps.start(minTime=1000, minDistance=0)
+        except Exception as e:
+            print("GPS no disponible:", e)
+            self._usar_ubicacion_como_origen(lat=DEFAULT_LAT, lon=DEFAULT_LON)
 
+    def _usar_ubicacion_como_origen(self, **kwargs):
+        lat = kwargs.get("lat")
+        lon = kwargs.get("lon")
 
-            self.mapa.bind(on_touch_up=self._on_map_touch)
+        if not lat or not lon:
+            print("GPS inválido, usando ubicación por defecto.")
+            lat, lon = DEFAULT_LAT, DEFAULT_LON
 
-            if hasattr(self, 'ids') and 'mapa_holder' in self.ids:
-                self.ids.mapa_holder.add_widget(self.mapa)
+        print("Origen definido automáticamente en:", lat, lon)
 
-    def _on_map_touch(self, instance, touch):
-        """
-        Detectar clic real sobre el mapa.
-        """
-        # Verificar que el clic es dentro del mapa, no en el screen entero
-        if not self.mapa.collide_point(*touch.pos):
-            return False
+        # coloca el origen en el mapa
+        self._actualizar_mapa("origen", lat, lon)
 
-        # Solo clic izquierdo
-        if hasattr(touch, "button") and touch.button != "left":
-            return False
+        # guardar coordenadas del origen
+        self.origen_lat = lat
+        self.origen_lon = lon
 
-        # Convertir coordenadas del clic a lat/lon
-        lat, lon = self.mapa.get_latlon_at(*touch.pos)
-        self._on_map_click(lat, lon)
-        return True
+        # ya no necesitamos seguir escuchando GPS (evita gastar batería)
+        try:
+            gps.stop()
+        except:
+            pass
 
-    @mainthread
-    def _on_map_click(self, lat, lon):
-        """
-        Primer clic → ORIGEN
-        Segundo clic → DESTINO
-        """
-        # Primer clic → origen
-        if not self.origen_seleccionado:
-            self.origen_lat = lat
-            self.origen_lon = lon
-            self.origen_seleccionado = True
-            self._poner_marcador_origen(lat, lon)
+    def on_location(self, **kwargs):
+        lat = kwargs.get("lat")
+        lon = kwargs.get("lon")
+
+        if not lat or not lon:
+            self.set_default_location()
             return
 
-        # Segundo clic → destino
-        self.destino_lat = lat
-        self.destino_lon = lon
-        self._poner_marcador_destino(lat, lon)
+        print("Ubicación detectada:", lat, lon)
+        self.manejar_ubicacion(lat, lon)
+        gps.stop()
 
-    def _poner_marcador_origen(self, lat, lon):
-        if hasattr(self, "origen_marker"):
-            self.mapa.remove_widget(self.origen_marker)
+    def on_status(self, stype, status):
+        print("GPS status:", stype, status)
 
-        self.origen_marker = MapMarkerPopup(lat=lat, lon=lon)
-        self.mapa.add_widget(self.origen_marker)
+    def set_default_location(self):
+        print("Usando ubicación por defecto")
+        self.manejar_ubicacion(DEFAULT_LAT, DEFAULT_LON)
 
-    def _poner_marcador_destino(self, lat, lon):
-        if hasattr(self, "destino_marker"):
-            self.mapa.remove_widget(self.destino_marker)
+    def manejar_ubicacion(self, lat, lon):
+        """Actualizar el mapa y colocar punto de origen automáticamente."""
+        self._actualizar_mapa("origen", lat, lon)
+        # guardar coordenadas del origen
+        self.origen_lat = lat
+        self.origen_lon = lon
+        print("Ubicación final:", lat, lon)
 
-        self.destino_marker = MapMarkerPopup(lat=lat, lon=lon)
-        self.mapa.add_widget(self.destino_marker)
-
+    # ============================================================
+    # REINICIAR
+    # ============================================================
     def reiniciar_seleccion(self):
         self.origen_seleccionado = False
-        self.origen_lat = None
-        self.origen_lon = None
-        self.destino_lat = None
-        self.destino_lon = None
+        self.origen_lat = self.origen_lon = None
+        self.destino_lat = self.destino_lon = None
 
-        # Remover marcadores
-        if hasattr(self, "origen_marker"):
-            self.mapa.remove_widget(self.origen_marker)
-        if hasattr(self, "destino_marker"):
-            self.mapa.remove_widget(self.destino_marker)
-    
-    #========================
-    #MAPA Y GEOLOCALIZACION
-    #========================
-    
+        mapa = self.ids.mapa
+
+        if self.origen_marker:
+            mapa.remove_widget(self.origen_marker)
+            self.origen_marker = None
+
+        if self.destino_marker:
+            mapa.remove_widget(self.destino_marker)
+            self.destino_marker = None
+
+    # ============================================================
+    # SOLICITAR VIAJE
+    # ============================================================
     def solicitar_viaje(self):
         try:
-            if not self.origen_lat or not self.origen_lon:
+            if not all([self.origen_lat, self.origen_lon]):
                 self.mensaje = "Selecciona un origen válido."
                 return
 
-            if not self.destino_lat or not self.destino_lon:
+            if not all([self.destino_lat, self.destino_lon]):
                 self.mensaje = "Selecciona un destino válido."
                 return
 
-            headers = get_headers()
+            cantidad = self.ids.txt_cantidad_pasajeros.text
+            if not cantidad.isdigit() or int(cantidad) < 1:
+                self.mensaje = "Cantidad de pasajeros inválida."
+                return
 
             datos = {
-                "origen_lat": float(self.origen_lat),
-                "origen_lon": float(self.origen_lon),
-                "destino_lat": float(self.destino_lat),
-                "destino_lon": float(self.destino_lon),
-                "cantidad_pasajeros": int(self.ids.txt_cantidad_pasajeros.text),
+                "origen_lat": self.origen_lat,
+                "origen_lon": self.origen_lon,
+                "destino_lat": self.destino_lat,
+                "destino_lon": self.destino_lon,
+                "cantidad_pasajeros": int(cantidad),
             }
 
+            headers = get_headers()
             resp = requests.post(f"{API_URL}/viajes/", json=datos, headers=headers)
 
             if resp.status_code == 201:
@@ -321,7 +320,6 @@ class ViajeScreen(Screen):
 
         except Exception as e:
             self.mensaje = f"Error de conexión: {e}"
-
 
 # ==============================
 # PANTALLA PRINCIPAL MOTOTAXISTA
