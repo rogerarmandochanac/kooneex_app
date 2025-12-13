@@ -112,9 +112,13 @@ class LoginScreen(MDScreen):
             resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=get_headers())
             data = resp.json()
             if resp.ok:
-                if data.get("mensaje") == "tiene_viaje_activo":
-                    self.manager.get_screen("viaje_en_curso_moto").cargar_viaje_en_curso()
-                    self.manager.current = "viaje_en_curso_moto"
+                if data.get("mensaje") == "tiene_viaje_aceptado":
+                    self.manager.get_screen("viaje_aceptado_moto").cargar_viaje_en_curso()
+                    self.manager.current = "viaje_aceptado_moto"
+                    return
+                elif data.get("mensaje") == 'tiene_viaje_en_curso':
+                    self.manager.get_screen('viaje_en_curso_moto')
+                    self.manager.current = 'viaje_en_curso_moto'
                     return
                 elif data.get("mensaje") == "tiene_viaje_ofertado":
                     self.manager.get_screen("pendientes").mostrar_espera_respuesta(data.get('viaje_id', None))
@@ -627,9 +631,9 @@ class PendientesScreen(Screen):
 
             if resp.status_code == 200:
                 viaje = resp.json()
-                viaje_screen = self.manager.get_screen("viaje_en_curso_moto")
+                viaje_screen = self.manager.get_screen("viaje_aceptado_moto")
                 viaje_screen.mostrar_viaje(viaje)
-                self.manager.current = "viaje_en_curso_moto"
+                self.manager.current = "viaje_aceptado_moto"
             else:
                 print(f"Error al iniciar viaje: {resp.text}")
 
@@ -666,7 +670,7 @@ class ViajeEnCursoScreen(Screen):
             self.ids.info_label.text = f"Error: {e}"
 
 
-class ViajeEnCursoMotoScreen(Screen):
+class ViajeAceptadoMotoScreen(Screen):
     def on_pre_enter(self):
         """Carga el viaje en curso del mototaxista al entrar en el screen"""
         self.cargar_viaje_en_curso()
@@ -690,12 +694,6 @@ class ViajeEnCursoMotoScreen(Screen):
                         f"Tarifa: ${aceptado.get('costo_final', 'N/A')}\n"
                         f"Estado: {aceptado['estado']}"
                     )
-                    if aceptado['estado'] == 'en_curso':
-                        self.ids.btn_completar.disabled = False
-                        self.ids.btn_iniciar.disabled = True
-                    else:
-                        self.ids.btn_completar.disabled = True
-                        self.ids.btn_iniciar.disabled = False
                     # Guardar el ID del viaje actual en un archivo para referencia rápida
                     with open("viaje_actual.txt", "w") as f:
                         f.write(str(aceptado["id"]))
@@ -721,14 +719,112 @@ class ViajeEnCursoMotoScreen(Screen):
             resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
 
             if resp.status_code in [200, 202]:
-                self.ids.info_label.text = "Viaje iniciado. En camino al destino."
-                self.ids.btn_iniciar.disabled = True
-                self.ids.btn_completar.disabled = False
+                viaje_screen = self.manager.get_screen("viaje_en_curso_moto")
+                self.manager.current = "viaje_en_curso_moto"
+                
             else:
                 self.ids.info_label.text = f"❌ Error al iniciar: {resp.text}"
 
         except Exception as e:
             self.ids.info_label.text = f"Error: {e}"
+
+
+class ViajeEnCursoMotoScreen(Screen):
+    mapview = ObjectProperty(None)
+    origen_lat = None
+    origen_lon = None
+    origen_marker = None
+    destino_marker = None
+
+    def on_enter(self, *args):
+        self.obtener_ubicacion()
+
+    def obtener_ubicacion(self):
+        try:
+            # Solo Android tiene GPS funcional
+            if platform.system().lower() != "android":
+                raise Exception("GPS no disponible fuera de Android")
+                
+            gps.configure(on_location=self.on_location, on_status=self.on_status)
+            gps.start(minTime=1000, minDistance=0)
+        except Exception as e:
+            print("GPS no disponible:", e)
+            self._usar_ubicacion_como_origen(lat=DEFAULT_LAT, lon=DEFAULT_LON)
+
+    def _usar_ubicacion_como_origen(self, **kwargs):
+        lat = kwargs.get("lat")
+        lon = kwargs.get("lon")
+
+        if not lat or not lon:
+            print("GPS inválido, usando ubicación por defecto.")
+            lat, lon = DEFAULT_LAT, DEFAULT_LON
+
+        print("Origen definido automáticamente en:", lat, lon)
+
+        # coloca el origen en el mapa
+        self._actualizar_mapa("origen", lat, lon)
+
+        # guardar coordenadas del origen
+        self.origen_lat = lat
+        self.origen_lon = lon
+
+        # ya no necesitamos seguir escuchando GPS (evita gastar batería)
+        try:
+            gps.stop()
+        except:
+            pass
+
+    def on_location(self, **kwargs):
+        lat = kwargs.get("lat")
+        lon = kwargs.get("lon")
+
+        if not lat or not lon:
+            self.set_default_location()
+            return
+
+        print("Ubicación detectada:", lat, lon)
+        self.manejar_ubicacion(lat, lon)
+        gps.stop()
+
+    def on_status(self, stype, status):
+        print("GPS status:", stype, status)
+
+    def set_default_location(self):
+        print("Usando ubicación por defecto")
+        self.manejar_ubicacion(DEFAULT_LAT, DEFAULT_LON)
+
+    def manejar_ubicacion(self, lat, lon):
+        """Actualizar el mapa y colocar punto de origen automáticamente."""
+        self._actualizar_mapa("origen", lat, lon)
+        # guardar coordenadas del origen
+        self.origen_lat = lat
+        self.origen_lon = lon
+        print("Ubicación final:", lat, lon)
+    
+    @mainthread
+    def _actualizar_mapa(self, tipo, lat, lon):
+        mapa = self.ids.mapa
+        mapa.center_on(lat, lon)
+
+        if tipo == "origen":
+            if self.origen_marker:
+                mapa.remove_widget(self.origen_marker)
+
+            self.origen_marker = MapMarker(lat=lat, lon=lon)
+            mapa.add_widget(self.origen_marker)
+
+            self.origen_lat = lat
+            self.origen_lon = lon
+
+        elif tipo == "destino":
+            if self.destino_marker:
+                mapa.remove_widget(self.destino_marker)
+
+            self.destino_marker = MapMarker(lat=lat, lon=lon)
+            mapa.add_widget(self.destino_marker)
+
+            self.destino_lat = lat
+            self.destino_lon = lon
 
     def marcar_completado(self):
         """Permite al mototaxista marcar su viaje como completado"""
@@ -750,8 +846,6 @@ class ViajeEnCursoMotoScreen(Screen):
 
         except Exception as e:
             self.ids.info_label.text = f"Error: {e}"
-
-
 
 # ==============================
 # APLICACIÓN TARIFA
@@ -962,6 +1056,7 @@ class KooneexApp(MDApp):
         sm.add_widget(PendientesScreen(name="pendientes"))
         sm.add_widget(TarifaScreen(name="tarifas"))
         sm.add_widget(ViajeEnCursoScreen(name="viaje_en_curso"))
+        sm.add_widget(ViajeAceptadoMotoScreen(name="viaje_aceptado_moto"))
         sm.add_widget(ViajeEnCursoMotoScreen(name="viaje_en_curso_moto"))
         return sm
 

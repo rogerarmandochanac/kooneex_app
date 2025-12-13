@@ -215,10 +215,17 @@ class ViajeViewSet(viewsets.ModelViewSet):
             ).only('id').first()
             
             if viaje_activo:
-                return Response({
-                    'mensaje': 'tiene_viaje_activo',
-                    'viaje_id': viaje_activo.id
-                }, status=status.HTTP_200_OK)
+                if viaje_activo.estado == 'aceptado':
+                    return Response({
+                        'mensaje': 'tiene_viaje_aceptado',
+                        'viaje_id': viaje_activo.id
+                    }, status=status.HTTP_200_OK)
+                
+                elif viaje_activo.estado == 'en_curso':
+                    return Response({
+                        'mensaje': 'tiene_viaje_en_curso',
+                        'viaje_id': viaje_activo.id
+                    }, status=status.HTTP_200_OK)
             
             # Verificar si tiene oferta pendiente
             oferta_pendiente = Oferta.objects.filter(

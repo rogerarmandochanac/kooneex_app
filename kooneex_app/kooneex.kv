@@ -163,8 +163,8 @@ ScreenManager:
                 height: 50
                 on_release: root.marcar_completado()
 
-<ViajeEnCursoMotoScreen>:
-    name: "viaje_en_curso_moto"
+<ViajeAceptadoMotoScreen>:
+    name: "viaje_aceptado_moto"
     MDFloatLayout:
         md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
         BoxLayout:
@@ -188,15 +188,23 @@ ScreenManager:
                 size_hint: (1, None)
                 height: 90
                 on_release: root.iniciar_viaje()
-            
-            MDRaisedButton:
-                id: btn_completar
-                text: "Marcar como completado"
-                md_bg_color: 0.2, 0.2, 0.2, 1
-                size_hint: 1, None
-                height: 50
-                on_release: root.marcar_completado()
 
+<ViajeEnCursoMotoScreen>:
+    name:"viaje_en_curso_moto"
+
+    MDFloatLayout:
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1
+
+        # --- MAPA ---
+        MapView:
+            id: mapa
+            zoom: 15
+            lat: 20.13730
+            lon: -90.17490
+            size_hint: 1, 1
+            pos_hint: {"x": 0, "y": 0}
+
+            
 <PendientesScreen>:
     name: 'pendientes'
     MDFloatLayout:
