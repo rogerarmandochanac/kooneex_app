@@ -16,13 +16,14 @@ from kivymd.uix.textfield import MDTextField
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivy.uix.image import Image
 from kivymd.uix.button import MDRaisedButton, MDIconButton, MDRectangleFlatButton
-from kivy_garden.mapview import MapView, MapMarkerPopup
+from kivy_garden.mapview import MapView, MapMarkerPopup, MapPolyline
 from kivy.clock import Clock, mainthread
 from kivy_garden.mapview import MapMarker, MapSource
 from plyer import gps
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.list import OneLineListItem
 from kivy.metrics import dp
+from kivy.utils import platform
 
 Window.size = (360, 640)
 
@@ -44,6 +45,11 @@ DESTINOS_PREDEFINIDOS = {
     "Pomuch Benito Juarez": (20.12962833879734, -90.1786241669862),
     "Pomuch Hacienda Dzodzil": (20.16802372650526, -90.23085213931239),
 }
+
+class FlechaMarker(MapMarker):
+    angle = NumericProperty(0)
+
+
 
 
 class LoginScreen(MDScreen):
@@ -230,7 +236,7 @@ class ViajeScreen(Screen):
     def obtener_ubicacion(self):
         try:
             # Solo Android tiene GPS funcional
-            if platform.system().lower() != "android":
+            if platform != "android":
                 raise Exception("GPS no disponible fuera de Android")
                 
             gps.configure(on_location=self.on_location, on_status=self.on_status)
@@ -728,11 +734,12 @@ class ViajeAceptadoMotoScreen(Screen):
         except Exception as e:
             self.ids.info_label.text = f"Error: {e}"
 
-
 class ViajeEnCursoMotoScreen(Screen):
     mapview = ObjectProperty(None)
     origen_lat = None
     origen_lon = None
+    destino_lat = None
+    destino_lon = None
     origen_marker = None
     destino_marker = None
 
