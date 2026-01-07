@@ -248,10 +248,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
         return Response({'mensaje': 'None'}, status=status.HTTP_204_NO_CONTENT)
 
     def perform_create(self, serializer):
-        print(self.request.data)
-        
-        pasajero = self.request.user
-                    
+        pasajero = self.request.user  
         cantidad = int(self.request.data.get('cantidad_pasajeros', 1))
         origen_lat = float(self.request.data.get('origen_lat'))
         origen_lon = float(self.request.data.get('origen_lon'))
@@ -265,7 +262,8 @@ class ViajeViewSet(viewsets.ModelViewSet):
         
         serializer.save(
             pasajero=pasajero,
-            costo_estimado=costo_estimado
+            costo_estimado=costo_estimado,
+            distancia_km = distancia
         )
     
     @action(detail=True, methods=['post'])

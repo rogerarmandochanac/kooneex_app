@@ -16,7 +16,7 @@ from kivymd.uix.textfield import MDTextField
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivy.uix.image import Image
 from kivymd.uix.button import MDRaisedButton, MDIconButton, MDRectangleFlatButton
-from kivy_garden.mapview import MapView, MapMarkerPopup, MapPolyline
+from kivy_garden.mapview import MapView, MapMarkerPopup
 from kivy.clock import Clock, mainthread
 from kivy_garden.mapview import MapMarker, MapSource
 from plyer import gps
@@ -48,9 +48,6 @@ DESTINOS_PREDEFINIDOS = {
 
 class FlechaMarker(MapMarker):
     angle = NumericProperty(0)
-
-
-
 
 class LoginScreen(MDScreen):
     username = StringProperty("")
@@ -409,6 +406,7 @@ class PendientesScreen(Screen):
 
             viajes = resp.json()
             if not viajes:
+                layout.padding = [24, 24, 24, 24]
                 layout.add_widget(MDLabel(text="No hay viajes pendientes.", halign="center"))
                 return
 
