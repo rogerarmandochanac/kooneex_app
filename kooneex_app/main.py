@@ -19,11 +19,16 @@ from kivymd.uix.button import MDRaisedButton, MDIconButton, MDRectangleFlatButto
 from kivy_garden.mapview import MapView, MapMarkerPopup
 from kivy.clock import Clock, mainthread
 from kivy_garden.mapview import MapMarker, MapSource
-from plyer import gps
 from kivymd.uix.menu import MDDropdownMenu
 from kivymd.uix.list import OneLineListItem
 from kivy.metrics import dp
 from kivy.utils import platform
+if platform == 'android':
+    from plyer import gps
+else:
+    gps = None
+from kivy.graphics import Color, Line
+from kivy.clock import Clock
 
 Window.size = (360, 640)
 
@@ -695,6 +700,7 @@ class ViajeAceptadoMotoScreen(Screen):
                         f"Viaje #{aceptado['id']}\n"
                         f"Pasajero: {aceptado.get('pasajero_nombre')}\n"
                         f"Destino: {aceptado.get('destino_lat', 'N/A')}, {aceptado.get('destino_lon', 'N/A')}\n"
+                        f"Distancia: {aceptado.get('distancia_km', 'N/A')} km.\n"
                         f"Tarifa: ${aceptado.get('costo_final', 'N/A')}\n"
                         f"Estado: {aceptado['estado']}"
                     )
@@ -733,28 +739,38 @@ class ViajeAceptadoMotoScreen(Screen):
             self.ids.info_label.text = f"Error: {e}"
 
 class ViajeEnCursoMotoScreen(Screen):
-    mapview = ObjectProperty(None)
     origen_lat = None
     origen_lon = None
     destino_lat = None
     destino_lon = None
     origen_marker = None
     destino_marker = None
+    ruta_linea = None
 
     def on_enter(self, *args):
         self.obtener_ubicacion()
+        self.cargar_destino_desde_api()
+        Clock.schedule_interval(lambda dt: self.dibujar_ruta(), 0.3)
+        self.iniciar_seguimiento_gps()
 
     def obtener_ubicacion(self):
+        if platform != "android":
+            print("GPS no disponible fuera de Android")
+            self._usar_ubicacion_como_origen(
+                lat=DEFAULT_LAT,
+                lon=DEFAULT_LON
+            )
+            return
+        if gps is None:
+            print("GPS no inicializado")
+            return
         try:
-            # Solo Android tiene GPS funcional
-            if platform.system().lower() != "android":
-                raise Exception("GPS no disponible fuera de Android")
-                
             gps.configure(on_location=self.on_location, on_status=self.on_status)
             gps.start(minTime=1000, minDistance=0)
         except Exception as e:
-            print("GPS no disponible:", e)
+            print("Error iniciando GPS:", e)
             self._usar_ubicacion_como_origen(lat=DEFAULT_LAT, lon=DEFAULT_LON)
+    
 
     def _usar_ubicacion_como_origen(self, **kwargs):
         lat = kwargs.get("lat")
@@ -778,7 +794,7 @@ class ViajeEnCursoMotoScreen(Screen):
             gps.stop()
         except:
             pass
-
+    
     def on_location(self, **kwargs):
         lat = kwargs.get("lat")
         lon = kwargs.get("lon")
@@ -793,18 +809,88 @@ class ViajeEnCursoMotoScreen(Screen):
 
     def on_status(self, stype, status):
         print("GPS status:", stype, status)
+    
+    def marcar_destino(self, lat, lon):
+        self.destino_lat = lat
+        self.destino_lon = lon
+        self._actualizar_mapa("destino", lat, lon)
+    
+    def cargar_destino_desde_api(self):
+        try:
+            with open("token.txt", "r") as f:
+                token = f.read().strip()
 
-    def set_default_location(self):
-        print("Usando ubicación por defecto")
-        self.manejar_ubicacion(DEFAULT_LAT, DEFAULT_LON)
+            with open("viaje_actual.txt", "r") as f:
+                viaje_id = f.read().strip()
 
-    def manejar_ubicacion(self, lat, lon):
-        """Actualizar el mapa y colocar punto de origen automáticamente."""
-        self._actualizar_mapa("origen", lat, lon)
-        # guardar coordenadas del origen
-        self.origen_lat = lat
-        self.origen_lon = lon
-        print("Ubicación final:", lat, lon)
+            headers = {
+                "Authorization": f"Bearer {token}"
+            }
+
+            resp = requests.get(
+                f"{API_URL}/viajes/{viaje_id}/",
+                headers=headers,
+                timeout=10
+            )
+
+            if resp.status_code != 200:
+                print("Error obteniendo viaje:", resp.text)
+                return
+
+            data = resp.json()
+
+            lat = data.get("destino_lat")
+            lon = data.get("destino_lon")
+
+            if not lat or not lon:
+                print("Destino no definido en el viaje")
+                return
+
+            print("Destino cargado desde API:", lat, lon)
+            self.marcar_destino(lat, lon)
+
+        except Exception as e:
+            print("Error cargando destino:", e)
+    
+
+    def dibujar_ruta(self):
+        if not self.origen_lat or not self.destino_lat:
+            return
+
+        mapa = self.ids.mapa
+        zoom = mapa.zoom
+
+        # convertir lat/lon a coordenadas de pantalla
+        x1, y1 = mapa.get_window_xy_from(self.origen_lat, self.origen_lon, zoom)
+        x2, y2 = mapa.get_window_xy_from(self.destino_lat, self.destino_lon, zoom)
+
+        # eliminar línea anterior
+        if self.ruta_linea:
+            mapa.canvas.after.remove(self.ruta_linea)
+            self.ruta_linea = None
+
+        with mapa.canvas.after:
+            Color(0, 0.5, 1, 0.85)  # azul tipo Uber
+            self.ruta_linea = Line(
+                points=[x1, y1, x2, y2],
+                width=4
+            )
+
+    
+    
+    @mainthread
+    def actualizar_posicion(self, lat, lon):
+        mapa = self.ids.mapa
+
+        if not self.origen_marker:
+            self.origen_marker = MapMarker(lat=lat, lon=lon)
+            mapa.add_widget(self.origen_marker)
+        else:
+            self.origen_marker.lat = lat
+            self.origen_marker.lon = lon
+
+        mapa.center_on(lat, lon)
+
     
     @mainthread
     def _actualizar_mapa(self, tipo, lat, lon):
@@ -830,6 +916,59 @@ class ViajeEnCursoMotoScreen(Screen):
 
             self.destino_lat = lat
             self.destino_lon = lon
+    
+    def iniciar_seguimiento_gps(self):
+        if platform != "android" or gps is None:
+            self.iniciar_gps_simulado()
+            print("Seguimiento GPS no disponible")
+            return
+
+        try:
+            gps.configure(
+                on_location=self.on_location_en_curso,
+                on_status=self.on_status
+            )
+            gps.start(minTime=2000, minDistance=1)
+            print("📡 Seguimiento GPS activo")
+        except Exception as e:
+            print("Error iniciando seguimiento GPS:", e)
+
+    def on_location_en_curso(self, **kwargs):
+        lat = kwargs.get("lat")
+        lon = kwargs.get("lon")
+        speed = kwargs.get("speed", 0)  # m/s
+
+        if not lat or not lon:
+            return
+        
+
+        # Ignorar ruido GPS (menos de 0.5 m/s ≈ 1.8 km/h)
+        if speed is not None and speed < 0.5:
+            return
+
+        self.actualizar_origen(lat, lon)
+    
+    @mainthread
+    def actualizar_origen(self, lat, lon):
+        mapa = self.ids.mapa
+
+        # actualizar datos
+        self.origen_lat = lat
+        self.origen_lon = lon
+
+        # crear o mover marker
+        if not self.origen_marker:
+            self.origen_marker = MapMarker(lat=lat, lon=lon)
+            mapa.add_widget(self.origen_marker)
+            mapa.center_on(lat, lon)  # solo la primera vez
+        else:
+            self.origen_marker.lat = lat
+            self.origen_marker.lon = lon
+
+        # actualizar ruta
+        if self.destino_lat:
+            self.dibujar_ruta()
+
 
     def marcar_completado(self):
         """Permite al mototaxista marcar su viaje como completado"""
@@ -851,6 +990,37 @@ class ViajeEnCursoMotoScreen(Screen):
 
         except Exception as e:
             self.ids.info_label.text = f"Error: {e}"
+    
+    def iniciar_gps_simulado(self):
+        # Ruta simulada (lat, lon)
+        self.ruta_fake = [
+            (20.137300, -90.174900),
+            (20.137310, -90.174880),
+            (20.137330, -90.174860),
+            (20.137360, -90.174830),
+            (20.137400, -90.174800),
+        ]
+
+        self._fake_index = 0
+
+        Clock.schedule_interval(self._tick_gps_fake, 1.5)
+        print("🧪 GPS simulado iniciado")
+    
+    def _tick_gps_fake(self, dt):
+        if self._fake_index >= len(self.ruta_fake):
+            return False  # detener simulación
+
+        lat, lon = self.ruta_fake[self._fake_index]
+        self._fake_index += 1
+
+        # Simula callback de plyer GPS
+        self.on_location_en_curso(
+            lat=lat,
+            lon=lon,
+            speed=5.0,   # m/s (~18 km/h)
+            bearing=90   # opcional
+        )
+
 
 # ==============================
 # APLICACIÓN TARIFA
