@@ -1,5 +1,4 @@
 import requests
-from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.properties import StringProperty, BooleanProperty, ObjectProperty, NumericProperty
@@ -28,7 +27,6 @@ if platform == 'android':
 else:
     gps = None
 from kivy.graphics import Color, Line
-from kivy.clock import Clock
 
 Window.size = (360, 640)
 
@@ -60,15 +58,20 @@ class LoginScreen(MDScreen):
     mensaje = StringProperty("")
     show_password = BooleanProperty(False)
 
+    def toggle_password(self):
+        print(self.show_password)
+        self.show_password = not self.show_password
+        
+
     def login(self):
         datos = {"username": self.username, "password": self.password}
         try:
-            resp = requests.post(f"{API_URL}/token/", json=datos)
+            resp = requests.post(f"{API_URL}/token/", json=datos, timeout=10)
             
             if resp.ok:               
                 access_token = resp.json().get("access")
                 headers = save_headers(access_token)
-                user_resp = requests.get(f"{API_URL}/usuario/", headers=headers)
+                user_resp = requests.get(f"{API_URL}/usuario/", headers=headers, timeout=10)
 
                 if resp.ok:
                     rol = user_resp.json().get("rol")
@@ -93,7 +96,7 @@ class LoginScreen(MDScreen):
 
     def evaluar_viaje_pasajero(self):
         try:
-            resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=get_headers())
+            resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=get_headers(), timeout=10)
             data = resp.json()
             if resp.ok:
                 if data.get("mensaje") == "tiene_viaje_activo":
@@ -117,7 +120,7 @@ class LoginScreen(MDScreen):
     
     def evaluar_viaje_mototaxista(self):
         try:
-            resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=get_headers())
+            resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=get_headers(), timeout=10)
             data = resp.json()
             if resp.ok:
                 if data.get("mensaje") == "tiene_viaje_aceptado":
@@ -494,14 +497,6 @@ class PendientesScreen(Screen):
                         self.sugerir_tarifa(vid, tinput.text)
                 ))
 
-                btn_box.add_widget(MDRectangleFlatButton(
-                    text="Rechazar",
-                    text_color=(1, 0.2, 0.2, 1),
-                    line_color=(1, 0.2, 0.2, 1),
-                    on_release=lambda x, vid=v["id"]:
-                        self.rechazar_viaje(vid)
-                ))
-
                 card.add_widget(btn_box)
 
                 layout.add_widget(card)
@@ -539,13 +534,12 @@ class PendientesScreen(Screen):
         except Exception as e:
             print("Error de conexión:", e)
 
-    def rechazar_viaje(self, viaje_id):
-        """El mototaxista rechaza el viaje."""
+    def rechazar_oferta(self, viaje_id):
+        """El mototaxista rechaza la oferta de viaje."""
         try:
             headers = get_headers()
             datos = {"desicion": "rechazar"}
-
-            resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
+            resp = requests.delete(f"{API_URL}/ofertas/{viaje_id}/rechazar/", json=datos, headers=headers)
 
             if resp.status_code in [200, 202]:
                 self.cargar_viajes_pendientes()
@@ -604,7 +598,7 @@ class PendientesScreen(Screen):
 
         # --- Mensajes principales ---
         card.add_widget(MDLabel(
-            text=f"Has enviado una oferta para el viaje #{viaje_id}.",
+            text=f"Has enviado una oferta para el viaje",
             font_style="Body1",
             theme_text_color="Primary"
         ))
@@ -625,7 +619,7 @@ class PendientesScreen(Screen):
             text_color=(1, 1, 1, 1),
             elevation=0,
             pos_hint={"center_x": 0.5},
-            on_release=lambda x: self.rechazar_viaje(viaje_id)
+            on_release=lambda x: self.rechazar_oferta(viaje_id)
         )
 
         card.add_widget(btn)
@@ -989,7 +983,8 @@ class ViajeEnCursoMotoScreen(Screen):
                 self.ids.info_label.text = f"❌ Error al completar: {resp.text}"
 
         except Exception as e:
-            self.ids.info_label.text = f"Error: {e}"
+            print(f'Error: {e}')
+            #self.ids.info_label.text = f"Error: {e}"
     
     def iniciar_gps_simulado(self):
         # Ruta simulada (lat, lon)

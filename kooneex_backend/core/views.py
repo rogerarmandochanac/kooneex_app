@@ -475,6 +475,18 @@ class OfertaViewSet(viewsets.ModelViewSet):
                 'estado_viaje': viaje.estado
             }, status=status.HTTP_200_OK)
     
+    @action(detail=True, methods=['delete'])
+    def rechazar(self, request, pk=None):
+        with transaction.atomic():
+            user = request.user
+            oferta = Oferta.objects.filter(viaje=pk, mototaxista=user).delete()
+            return Response({
+                'mensaje': 'Oferta eliminada correctamente.',
+                'viaje_id': pk,
+                'mototaxista': user.username,
+            }, status=status.HTTP_200_OK)
+            
+   
 class PagoViewSet(viewsets.ModelViewSet):
     queryset = Pago.objects.all()
     serializer_class = PagoSerializer

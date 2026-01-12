@@ -16,8 +16,6 @@ ScreenManager:
 
 <LoginScreen>:
     name: "login"
-    username: username.text
-    password: password.text
     show_password: False #Variable para poder manejar el mostrar o ocultar la contrasena
     background_orange_color : 0.9686, 0.5765, 0.1176, 1 #Definimos el color para todo el fondo de la app
     font_white_color : 1, 1, 1, 1
@@ -49,16 +47,17 @@ ScreenManager:
                 theme_text_color: "Custom"
                 text_color: root.font_white_color
             LoginMDTextField:
-                id: username
+                id: txt_username
                 hint_text: "Usuario"
                 icon_right: "account"
+                on_text: root.username = self.text
                 
             LoginMDTextField:
-                id: password
+                id: txt_password
                 hint_text: "Contraseña"
                 password: not root.show_password  # cambia dinámicamente
-                icon_right: "eye-off" if not root.show_password else "eye"
-                on_icon_right: root.toggle_password_visibility()
+                icon_right: "eye" if not root.show_password else "eye-off"
+                on_text: root.password = self.text
 
             MDRaisedButton:
                 text: "Ingresar"
@@ -210,11 +209,11 @@ ScreenManager:
             pos_hint: {"right": 0.95, "y": 0.05}
             on_release: root.marcar_completado()
         
-        MDFloatingActionButton:
-            icon: "close"
-            md_bg_color: 0.9 , 0.0, 0.0 , 1
-            pos_hint: {"right": 0.75, "y": 0.05}
-            on_release: root.marcar_completado()
+        #MDFloatingActionButton:
+            #icon: "close"
+            #md_bg_color: 0.9 , 0.0, 0.0 , 1
+            #pos_hint: {"right": 0.75, "y": 0.05}
+            #on_release: root.marcar_completado()
 
             
 <PendientesScreen>:
