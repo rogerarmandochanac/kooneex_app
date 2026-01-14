@@ -81,42 +81,62 @@ ScreenManager:
     MDFloatLayout:
         md_bg_color: 0.9686, 0.5765, 0.1176, 1
 
-        # --- MAPA ---
-        MapView:
-            id: mapa
-            zoom: 15
-            lat: 19.4326
-            lon: -99.1332
-            size_hint: 1, 1
-            pos_hint: {"x": 0, "y": 0}
 
-        # --- CONTENEDOR DE LOS CAMPOS ---
-        MDBoxLayout:
-            orientation: "vertical"
-            size_hint: 0.9, None
-            height: dp(180)
-            spacing: dp(10)
-            pos_hint: {"top": 0.97, "center_x": 0.5}
+        MDCard:
+            id: info_card
+            size_hint: None, None
+            size: "320dp", "400dp"
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+            md_bg_color: 1, 1, 1, 1
 
-            MDTextField:
-                id: txt_origen
-                hint_text: "Origen"
-                mode: "rectangle"
-                on_text: root.buscar_direccion(self.text, "origen")
+            MDBoxLayout:
+                orientation: "vertical"
+                size_hint: 0.9, None
+                height: dp(250)
+                spacing: dp(10)
+                pos_hint: {"top": 0.70, "center_x": 0.5}
 
-            MDTextField:
-                id: txt_destino
-                hint_text: "Selecciona el destino"
-                readonly: True
-                mode: "rectangle"
-                on_focus: if self.focus: root.abrir_lista_destinos()
-            
-            
-            MDTextField:
-                id: txt_cantidad_pasajeros
-                hint_text: "No. Pasajeros"
-                text: "1"
-                mode: "rectangle"
+                MDTextField:
+                    id: txt_origen
+                    hint_text: "Origen"
+                    size_hint_x: 0.9
+                    pos_hint:{"center_x":0.5}
+                    mode: "rectangle"
+                    on_text: root.buscar_direccion(self.text, "origen")
+
+                MDTextField:
+                    id: txt_destino
+                    hint_text: "Selecciona el destino"
+                    size_hint_x: 0.9
+                    pos_hint:{"center_x":0.5}
+                    readonly: True
+                    mode: "rectangle"
+                    on_focus: if self.focus: root.abrir_lista_destinos()
+                
+                
+                MDTextField:
+                    id: txt_cantidad_pasajeros
+                    hint_text: "No. Pasajeros"
+                    size_hint_x: 0.9
+                    size_hint_y:None
+                    height:"40dp"
+                    pos_hint:{"center_x":0.5}
+                    text: "1"
+                    mode: "rectangle"
+                
+                MDBoxLayout:
+                    size_hint_x: 0.9
+                    size_hint_y: None
+                    height: "140dp"
+                    pos_hint: {"center_x": 0.5}
+                    orientation: "vertical"
+
+                    MDTextField:
+                        id: txt_referencia
+                        hint_text: "Referencia (ej. casa azul, portón negro)"
+                        mode: "rectangle"
+                        multiline: True
+                        size_hint_y: 1
 
         MDRaisedButton:
             text: "Solicitar viaje"
@@ -142,25 +162,53 @@ ScreenManager:
     name: "viaje_en_curso"
     MDFloatLayout:
         md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
+
+        MDCard:
+            id: info_card
+            size_hint: None, None
+            size: "320dp", "200dp"
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+            md_bg_color: 1, 1, 1, 1
+
+            MDBoxLayout:
+                padding: "16dp"
+                orientation: "vertical"
+
+                Image:
+                    source: "assets/moto_koonex.png"
+                    size_hint: None, None
+                    size: "90dp", "90dp"
+                    allow_stretch: True
+                    keep_ratio: True
+                    pos_hint: {"center_x": 0.5}
+
+                MDLabel:
+                    id: info_label
+                    text: "Cargando información del viaje..."
+                    halign: "center"
+                    valign: "middle"
+                    theme_text_color: "Custom"
+                    text_color: 0.9686, 0.5765, 0.1176, 1
+                    font_style: "H6"
+                    markup:True
+
         BoxLayout:
             orientation: "vertical"
             padding: 20
             spacing: 10
 
-            MDLabel:
-                id: info_label
-                text: "Cargando información del viaje..."
-                theme_text_color:"Custom"
-                text_color:(1, 1, 1, 1)
-                font_style:"H6"
-                pos_hint: {"center_x": 0.5}
-            
+
             MDRaisedButton:
-                text: "Marcar como completado"
+                text: "Marcar viaje como completado"
                 md_bg_color: 0.2, 0.2, 0.2, 1
-                size_hint: 1, None
-                height: 50
+                text_color: 1, 1, 1, 1
+                size_hint_x:0.9
+                size_hint_y:None
+                height: "60dp"
+                pos_hint: {"center_x": 0.5}
+                elevation: 2
                 on_release: root.marcar_completado()
+
 
 <ViajeAceptadoMotoScreen>:
     name: "viaje_aceptado_moto"

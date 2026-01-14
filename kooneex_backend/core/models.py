@@ -71,10 +71,10 @@ class Viaje(models.Model):
                                    related_name='viajes_mototaxista')
     origen_lat = models.FloatField()
     origen_lon = models.FloatField()
-    #origen_desc = models.CharField(max_length=50, null=True, blank=True)
     destino_lat = models.FloatField()
     destino_lon = models.FloatField()
     cantidad_pasajeros = models.PositiveIntegerField(default=1)
+    referencia = models.CharField(max_length=100, blank=False) #Para colocar un texto con la ubicacion de referencia
     distancia_km = models.FloatField(null=True, blank=True)
     costo_estimado = models.DecimalField(max_digits=10, decimal_places=2, 
                                         null=True, blank=True)

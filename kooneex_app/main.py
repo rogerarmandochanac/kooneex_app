@@ -152,90 +152,18 @@ class LoginScreen(MDScreen):
             print("Error al verificar estado del mototaxista:", e)
 
 class ViajeScreen(Screen):
-    mapview = ObjectProperty(None)
-
     origen_seleccionado = BooleanProperty(False)
     mensaje = StringProperty("")
     buscar_evento = None
-
-    # Marcadores y coordenadas
-    origen_marker = None
-    destino_marker = None
     origen_lat = None
     origen_lon = None
     destino_lat = None
     destino_lon = None
     menu_destinos = None
 
-    # ============================================================
-    # BUSCAR DIRECCIÓN (DEBOUNCE)
-    # ============================================================
-    def buscar_direccion(self, texto, tipo):
-        """Aplica debounce para evitar bombardear al servidor."""
-        if self.buscar_evento:
-            self.buscar_evento.cancel()
 
-        self.buscar_evento = Clock.schedule_once(
-            lambda dt: self._ejecutar_busqueda(texto, tipo), 0.8
-        )
-
-    def _ejecutar_busqueda(self, texto, tipo):
-        if len(texto) < 3:
-            return
-
-        try:
-            url = "https://nominatim.openstreetmap.org/search"
-            params = {"q": texto, "format": "json", "limit": 1}
-            headers = {"User-Agent": "Kooneex-App"}
-
-            resp = requests.get(url, params=params, headers=headers)
-            if resp.status_code != 200:
-                return
-
-            data = resp.json()
-            if not data:
-                return
-
-            lat = float(data[0]["lat"])
-            lon = float(data[0]["lon"])
-
-            self._actualizar_mapa(tipo, lat, lon)
-
-        except Exception as e:
-            print("Error buscando dirección:", e)
-
-    # ============================================================
-    # ACTUALIZAR MAPA Y MARCADORES
-    # ============================================================
-    @mainthread
-    def _actualizar_mapa(self, tipo, lat, lon):
-        mapa = self.ids.mapa
-        mapa.center_on(lat, lon)
-
-        if tipo == "origen":
-            if self.origen_marker:
-                mapa.remove_widget(self.origen_marker)
-
-            self.origen_marker = MapMarker(lat=lat, lon=lon)
-            mapa.add_widget(self.origen_marker)
-
-            self.origen_lat = lat
-            self.origen_lon = lon
-
-        elif tipo == "destino":
-            if self.destino_marker:
-                mapa.remove_widget(self.destino_marker)
-
-            self.destino_marker = MapMarker(lat=lat, lon=lon)
-            mapa.add_widget(self.destino_marker)
-
-            self.destino_lat = lat
-            self.destino_lon = lon
-
-    # ============================================================
-    # GPS
-    # ============================================================
     def on_enter(self, *args):
+        #Al iniciar la pantalla obtenemos la ubicacion mediante gps
         self.obtener_ubicacion()
 
     def obtener_ubicacion(self):
@@ -259,9 +187,6 @@ class ViajeScreen(Screen):
             lat, lon = DEFAULT_LAT, DEFAULT_LON
 
         print("Origen definido automáticamente en:", lat, lon)
-
-        # coloca el origen en el mapa
-        self._actualizar_mapa("origen", lat, lon)
 
         # guardar coordenadas del origen
         self.origen_lat = lat
@@ -292,13 +217,6 @@ class ViajeScreen(Screen):
         print("Usando ubicación por defecto")
         self.manejar_ubicacion(DEFAULT_LAT, DEFAULT_LON)
 
-    def manejar_ubicacion(self, lat, lon):
-        """Actualizar el mapa y colocar punto de origen automáticamente."""
-        self._actualizar_mapa("origen", lat, lon)
-        # guardar coordenadas del origen
-        self.origen_lat = lat
-        self.origen_lon = lon
-        print("Ubicación final:", lat, lon)
     
     def abrir_lista_destinos(self):
         # Cerrar menú previo si existía
@@ -336,32 +254,8 @@ class ViajeScreen(Screen):
         self.destino_lat = lat
         self.destino_lon = lon
 
-        # Marcar en el mapa
-        self._actualizar_mapa("destino", lat, lon)
-
         print("Destino marcado:", nombre, lat, lon)
 
-    # ============================================================
-    # REINICIAR
-    # ============================================================
-    def reiniciar_seleccion(self):
-        self.origen_seleccionado = False
-        self.origen_lat = self.origen_lon = None
-        self.destino_lat = self.destino_lon = None
-
-        mapa = self.ids.mapa
-
-        if self.origen_marker:
-            mapa.remove_widget(self.origen_marker)
-            self.origen_marker = None
-
-        if self.destino_marker:
-            mapa.remove_widget(self.destino_marker)
-            self.destino_marker = None
-
-    # ============================================================
-    # SOLICITAR VIAJE
-    # ============================================================
     def solicitar_viaje(self):
         try:
             if not all([self.origen_lat, self.origen_lon]):
@@ -659,7 +553,7 @@ class ViajeEnCursoScreen(Screen):
                 if viaje:
                     viaje = viaje[0]
                     if viaje['estado'] == 'en_curso':
-                        self.ids.info_label.text = f"Viaje en curso su mototaxista {viaje.get('mototaxista_nombre')} esta en camino"
+                        self.ids.info_label.text = f"Su mototaxi con el mototaxista[b]{viaje.get('mototaxista_nombre')}[/b] esta en camino favor de estar pendiente."
                     else:
                         self.ids.info_label.text = (
                             f"Viaje {viaje['estado']} por el mototaxista {viaje.get('mototaxista_nombre')} con un costo final de ${viaje.get('costo_final')}"
