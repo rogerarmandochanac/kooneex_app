@@ -1,0 +1,40 @@
+<ViajeAceptadoMotoScreen>:
+    name: "viaje_aceptado_moto"
+    MDFloatLayout:
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
+        
+        MDCard:
+            id: info_card
+            size_hint: None, None
+            size: "320dp", "200dp"
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+            md_bg_color: 1, 1, 1, 1
+
+            MDBoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "8dp"
+        
+                MDLabel:
+                    id: info_label
+                    text: "Cargando viaje en curso..."
+                    theme_text_color:"Custom"
+                    text_color: 0.9686, 0.5765, 0.1176, 1
+                    font_style:"H6"
+                    size_hint_x: .9
+                    halign:"center"
+                    pos_hint: {"center_x": 0.5}
+
+        MDBoxLayout:
+            size_hint: 1, None
+            height: "80dp"
+            padding: ["16dp", "0dp", "16dp", "0dp"]  # izquierda, arriba, derecha, abajo
+            pos_hint: {"center_x": 0.5, "y": 0.05}
+
+            MDRaisedButton:
+                id: btn_iniciar
+                text: "Iniciar viaje"
+                md_bg_color: 0.2, 0.2, 0.2, 1
+                size_hint: 1, None
+                height: "56dp"
+                on_release: root.iniciar_viaje()

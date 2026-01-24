@@ -105,20 +105,19 @@ class MototaxiViewSet(viewsets.ModelViewSet):
         return Response(cercanos)
 
 class ViajeViewSet(viewsets.ModelViewSet):
-    # QUERYSET BASE OPTIMIZADO
+    
     base_queryset = Viaje.objects.select_related(
         'pasajero', 'mototaxista'
+        
     ).prefetch_related(
         Prefetch('ofertas', queryset=Oferta.objects.select_related('mototaxista').only(
-            'id', 'monto', 'tiempo_estimado', 'aceptada', 'creada_en',
-            'mototaxista__id', 'mototaxista__username',
-            'mototaxista__first_name', 'mototaxista__last_name'
+            'id', 'monto', 'tiempo_estimado', 'aceptada', 'mototaxista__id', 
+            'mototaxista__username',
         ))
     ).only(
         'id', 'estado', 'origen_lat', 'origen_lon', 'destino_lat', 'destino_lon',
-        'cantidad_pasajeros', 'costo_estimado', 'costo_final', 'creado_en',
-        'pasajero__id', 'pasajero__username', 'pasajero__first_name', 'pasajero__last_name',
-        'mototaxista__id', 'mototaxista__username', 'mototaxista__first_name', 'mototaxista__last_name'
+        'cantidad_pasajeros', 'costo_estimado', 'costo_final','pasajero__username', 
+        'mototaxista__id', 'mototaxista__username', 'referencia', 'distancia_km'
     )
     
     queryset = base_queryset
@@ -129,10 +128,9 @@ class ViajeViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         if user.rol == 'pasajero':
-            return self.base_queryset.filter(pasajero=user).order_by('-creado_en')
+            return self.base_queryset.filter(pasajero=user).order_by('-distancia_km')
         
         elif user.rol == 'mototaxista':
-            # ANOTAR SI TIENE OFERTA ACTIVA
             oferta_activa_subquery = Oferta.objects.filter(
                 mototaxista=user,
                 viaje_id=OuterRef('id'),
@@ -246,71 +244,55 @@ class ViajeViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_200_OK)
         
         return Response({'mensaje': 'None'}, status=status.HTTP_204_NO_CONTENT)
-
-    def perform_create(self, serializer):
-        pasajero = self.request.user  
-        cantidad = int(self.request.data.get('cantidad_pasajeros', 1))
-        origen_lat = float(self.request.data.get('origen_lat'))
-        origen_lon = float(self.request.data.get('origen_lon'))
-        destino_lat = float(self.request.data.get('destino_lat'))
-        destino_lon = float(self.request.data.get('destino_lon'))
-        
-        distancia = calcular_distancia(origen_lat, origen_lon, destino_lat, destino_lon)
-        costo_base = 10
-        comision = 1
-        costo_estimado = (costo_base * cantidad) + comision
-        
-        serializer.save(
-            pasajero=pasajero,
-            costo_estimado=costo_estimado,
-            distancia_km = distancia
-        )
     
     @action(detail=True, methods=['post'])
     def aceptar(self, request, pk=None):
-        """Aceptar viaje - optimizado con transacción"""
-        with transaction.atomic():
-            viaje = self.get_object()
-            user = request.user
+        viaje = self.get_object()
+        user = request.user
 
-            if user.rol != "mototaxista":
-                return Response(
-                    {"error": "Solo los mototaxistas pueden aceptar viajes."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+        if user.rol != "mototaxista":
+            return Response(
+                {"error": "Solo los mototaxistas pueden aceptar viajes."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-            if viaje.estado != "pendiente":
-                return Response(
-                    {"error": "El viaje ya fue aceptado o no está disponible."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Verificar que no tenga otros viajes activos
-            if Viaje.objects.filter(
-                mototaxista=user,
-                estado__in=['aceptado', 'en_curso']
-            ).exists():
-                return Response(
-                    {"error": "Ya tienes un viaje activo."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            viaje.estado = "aceptado"
-            viaje.mototaxista = user
-            viaje.save()
-
-            # Actualizar mototaxi como no disponible
-            try:
-                mototaxi = Mototaxi.objects.get(conductor=user)
-                mototaxi.disponible = False
-                mototaxi.save()
-            except Mototaxi.DoesNotExist:
-                pass
-
+        try:
+            viaje.aceptar(user)
             return Response({
                 "mensaje": "Viaje aceptado correctamente.",
                 "viaje_id": viaje.id
-            }, status=status.HTTP_200_OK)
+            })
+        
+        except ValidationError as e:
+            return Response(
+                {"error": e.message},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['delete'])
+    def eliminar(self, request, pk=None):
+        viaje = self.get_object()
+        user = request.user
+
+        # Seguridad extra (opcional pero recomendado)
+        if user != viaje.pasajero and user.rol != 'admin':
+            return Response(
+                {"error": "No tienes permiso para eliminar este viaje."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            viaje.eliminar()
+        except ValidationError as e:
+            return Response(
+                {"error": e.message},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response(
+            {"mensaje": "Viaje eliminado correctamente."},
+            status=status.HTTP_204_NO_CONTENT
+        )
     
     @action(detail=True, methods=['post'])
     def completar(self, request, pk=None):
@@ -350,8 +332,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
             return Response({
                 "mensaje": f"Viaje #{viaje.id} completado correctamente."
             }, status=status.HTTP_200_OK)
-
-
+    
 class OfertaViewSet(viewsets.ModelViewSet):
     queryset = Oferta.objects.select_related(
         'viaje', 'mototaxista', 'viaje__pasajero'
@@ -476,17 +457,28 @@ class OfertaViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['delete'])
+    def cancelar_viaje(self, request, pk=None):
+        with transaction.atomic():
+            user = request.user
+            oferta = Oferta.objects.filter(viaje=pk).delete()
+            viaje = Viaje.objects.filter(viaje=pk).delete()
+            return Response({
+                'mensaje': 'Viaje eliminada correctamente.',
+                'viaje_id': pk,
+                'mototaxista': user.username,
+            }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['delete'])
     def rechazar(self, request, pk=None):
         with transaction.atomic():
             user = request.user
             oferta = Oferta.objects.filter(viaje=pk, mototaxista=user).delete()
             return Response({
                 'mensaje': 'Oferta eliminada correctamente.',
-                'viaje_id': pk,
+                'oferta_id': pk,
                 'mototaxista': user.username,
             }, status=status.HTTP_200_OK)
             
-   
 class PagoViewSet(viewsets.ModelViewSet):
     queryset = Pago.objects.all()
     serializer_class = PagoSerializer

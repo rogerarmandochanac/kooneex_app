@@ -1,0 +1,80 @@
+<ViajeScreen>:
+    name: "viaje"
+    MDFloatLayout:
+        md_bg_color: 0.9686, 0.5765, 0.1176, 1
+
+        MDCard:
+            id: info_card
+            size_hint: None, None
+            size: "320dp", "400dp"
+            pos_hint: {"center_x": 0.5, "center_y": 0.5}
+            md_bg_color: 1, 1, 1, 1
+
+            MDBoxLayout:
+                orientation: "vertical"
+                size_hint: 0.9, None
+                height: dp(250)
+                spacing: dp(10)
+                pos_hint: {"top": 0.70, "center_x": 0.5}
+
+                MDTextField:
+                    id: txt_origen
+                    hint_text: "Origen"
+                    size_hint_x: 0.9
+                    pos_hint:{"center_x":0.5}
+                    mode: "rectangle"
+                    on_text: root.buscar_direccion(self.text, "origen")
+                
+                MDTextField:
+                    id: txt_destino
+                    hint_text: "Selecciona el destino"
+                    size_hint_x: 0.9
+                    pos_hint:{"center_x":0.5}
+                    readonly: True
+                    mode: "rectangle"
+                    on_focus: if self.focus: root.abrir_lista_destinos()
+                
+                
+                MDTextField:
+                    id: txt_cantidad_pasajeros
+                    hint_text: "No. Pasajeros"
+                    size_hint_x: 0.9
+                    size_hint_y:None
+                    height:"40dp"
+                    pos_hint:{"center_x":0.5}
+                    text: "1"
+                    mode: "rectangle"
+                
+                MDBoxLayout:
+                    size_hint_x: 0.9
+                    size_hint_y: None
+                    height: "140dp"
+                    pos_hint: {"center_x": 0.5}
+                    orientation: "vertical"
+
+                    MDTextField:
+                        id: txt_referencia
+                        hint_text: "Referencia (ej. casa azul, portón negro)"
+                        mode: "rectangle"
+                        multiline: True
+                        size_hint_y: 1
+
+        MDRaisedButton:
+            text: "Solicitar viaje"
+            size_hint: 0.6, None
+            height: dp(48)
+            pos_hint: {"center_x": 0.5, "y": 0.05}
+            md_bg_color: 0, 0.5, 0.2, 1
+            on_release: root.solicitar_viaje()
+
+        # --- MENSAJE ---
+        MDLabel:
+            id: mensaje_label
+            text: root.mensaje
+            halign: "center"
+            valign: "middle"
+            size_hint_y: None
+            height: dp(30)
+            pos_hint: {"center_x": 0.5, "y": 0.01}
+            theme_text_color: "Custom"
+            text_color: 1, 1, 1, 1

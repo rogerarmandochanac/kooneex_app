@@ -1,0 +1,18 @@
+API_URL = "http://127.0.0.1:8000/api"
+
+DEFAULT_LAT = 20.1373
+DEFAULT_LON = -90.1749
+
+DESTINOS_PREDEFINIDOS = {
+    "Pomuch Centro": (20.13730, -90.17490),
+    "Pomuch Soledad": (20.145780, -90.173459),
+    "Pomuch Nueva": (20.144052896584597, -90.17682172260673),
+    "Pomuch San Francisco": (20.146953764112478, -90.16952611440409),
+    "Pomuch Villa Lucrecia": (20.14155488415286, -90.16592122564514),
+    "Pomuch San Diego": (20.141151975180843, -90.17287351110882),
+    "Pomuch Santa Cristina": (20.135914063988263, -90.16540624153673),
+    "Pomuch San pedro I": (20.13285181919244, -90.17321683384776),
+    "Pomuch San pedro II": (20.12680773892196, -90.17690755329146),
+    "Pomuch Benito Juarez": (20.12962833879734, -90.1786241669862),
+    "Pomuch Hacienda Dzodzil": (20.16802372650526, -90.23085213931239),
+}

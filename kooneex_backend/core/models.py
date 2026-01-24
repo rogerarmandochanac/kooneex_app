@@ -27,6 +27,15 @@ class Usuario(AbstractUser):
         return self.username
 
 
+class Tarifa(models.Model):
+    tarifa = models.FloatField(null=True, blank=True, default=10.0)
+    comision = models.IntegerField(null=True, blank=True, default=1)
+    activa = models.BooleanField(default=True)
+    creada_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.tarifa
+
 class Mototaxi(models.Model):
     conductor = models.OneToOneField('Usuario', on_delete=models.CASCADE, 
                                     limit_choices_to={'rol': 'mototaxista'})
@@ -91,6 +100,41 @@ class Viaje(models.Model):
             models.Index(fields=['estado', 'creado_en']),
             models.Index(fields=['origen_lat', 'origen_lon']),
         ]
+    
+    def aceptar(self, mototaxista):
+        if self.estado != 'pendiente':
+            raise ValidationError("El viaje no está disponible.")
+
+        if Viaje.objects.filter(
+            mototaxista=mototaxista,
+            estado__in=['aceptado', 'en_curso']
+        ).exists():
+            raise ValidationError("El mototaxista ya tiene un viaje activo.")
+
+        with transaction.atomic():
+            self.estado = 'aceptado'
+            self.mototaxista = mototaxista
+            self.save()
+
+            from .models import Mototaxi
+            try:
+                mototaxi = Mototaxi.objects.get(conductor=mototaxista)
+                mototaxi.disponible = False
+                mototaxi.save()
+            except Mototaxi.DoesNotExist:
+                pass
+    
+
+    def puede_eliminarse(self):
+        return self.estado in ['pendiente', 'rechazado']
+
+    def eliminar(self):
+        if not self.puede_eliminarse():
+            raise ValidationError(
+                "El viaje no puede eliminarse en su estado actual."
+            )
+
+        self.delete()
 
     def __str__(self):
         return f"Viaje #{self.id} - {self.pasajero.username} ({self.estado})"
