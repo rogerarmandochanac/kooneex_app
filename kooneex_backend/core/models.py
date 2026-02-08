@@ -9,7 +9,7 @@ class Usuario(AbstractUser):
     )
     rol = models.CharField(max_length=20, choices=ROLES, default='pasajero')
     telefono = models.CharField(max_length=15, blank=True, null=True)
-    direccion = models.CharField(max_length=255, blank=True, null=True)
+    foto = models.ImageField(upload_to='usuarios/', blank=True, null=True)
 
     class Meta:
         indexes = [

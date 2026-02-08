@@ -1,44 +1,46 @@
 <TarifaScreen>:
-    MDFloatLayout:
-        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
-        BoxLayout:
-            orientation: "vertical"
-            padding: 10
-            spacing: 10
+    BoxLayout:
+        orientation: "vertical"
+        padding: dp(12)
+        spacing: dp(12)
 
-            Label:
-                text: "Ofertas de Mototaxistas"
-                font_size: 22
-                bold: True
-                size_hint_y: None
-                height: 40
-                color: 1, 1, 0, 1
+        FloatLayout:
 
-            ScrollView:
-                do_scroll_x: False
-                do_scroll_y: True
+            RecycleView:
+                id: rv_ofertas
+                viewclass: "TarifaItem"
+                bar_width: dp(4)
 
-                GridLayout:
-                    id: tarifas_container
-                    cols: 1
+                RecycleBoxLayout:
+                    orientation: "vertical"
+                    default_size: None, dp(190)
+                    default_size_hint: 1, None
                     size_hint_y: None
                     height: self.minimum_height
-                    spacing: 10
-
-            Label:
-                id: mensaje_tarifas
-                text: ""
-                size_hint_y: None
-                height: 30
-                color: 0, 1, 0, 1
+                    spacing: dp(12)
             
-            MDRaisedButton:
-                text: "Cancelar viaje"
-                md_bg_color: 0.85, 0.2, 0.2, 1
-                text_color: 1, 1, 1, 1
-                size_hint_x:0.9
-                size_hint_y:None
-                height: "60dp"
-                pos_hint: {"center_x": 0.5}
-                elevation: 2
-                on_release: root.eliminar_viaje()
+            MDLabel:
+                text: "Aun no hay ofertas disponibles"
+                halign: "center"
+                valign: "middle"
+                text_size: self.size
+                font_style: "Subtitle1"
+                theme_text_color: "Secondary"
+                text_bold: True
+
+                # 👇 solo se muestra cuando NO hay data
+                opacity: 0 if rv_ofertas.data else 1
+
+        MDLabel:
+            id: mensaje_tarifas
+            text: ""
+            halign: "center"
+            theme_text_color: "Error"
+            size_hint_y: None
+            height: self.texture_size[1]
+    
+    MDFloatingActionButton:
+        icon: "close"
+        md_bg_color: 0.9 , 0.0, 0.0 , 1
+        pos_hint: {"right": 0.95, "y": 0.05}
+        on_release: root.eliminar_viaje()

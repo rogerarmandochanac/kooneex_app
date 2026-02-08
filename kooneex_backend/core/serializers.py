@@ -19,10 +19,32 @@ class UsuarioSerializer(serializers.ModelSerializer):
                   'last_name',
                   'nombre_completo', 
                   'rol', 
-                  'telefono', 
-                  'direccion'
+                  'telefono',
+                  'foto',
                   ]
 
+class UsuarioRegistroSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Usuario
+        fields = [
+            "username",
+            "password",
+            "first_name",
+            "last_name",
+            "telefono",
+            "rol",
+            "foto",
+        ]
+        extra_kwargs = {
+            "password": {"write_only": True}
+        }
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        user = Usuario(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
 
 class MototaxiSerializer(serializers.ModelSerializer):
     conductor = UsuarioSerializer(read_only=True)
@@ -52,14 +74,25 @@ class OfertaSerializer(serializers.ModelSerializer):
         read_only=True,
         default="No disponible"  # Valor por defecto
     )
+
+    mototaxista_foto = serializers.SerializerMethodField()
     
     class Meta:
         model = Oferta
         fields = [
             'id', 'viaje', 'monto', 'tiempo_estimado', 'aceptada', 'creada_en',
-            'mototaxista', 'mototaxista_nombre', 'mototaxista_telefono'
+            'mototaxista', 'mototaxista_nombre', 'mototaxista_telefono', 'mototaxista_foto'
         ]
         read_only_fields = ['mototaxista', 'aceptada', 'creada_en']
+    
+    def get_mototaxista_foto(self, obj):
+        request = self.context.get("request")
+
+        if obj.mototaxista.foto:
+            url = obj.mototaxista.foto.url
+            return request.build_absolute_uri(url) if request else url
+
+        return None
     
     def get_mototaxista_nombre(self, obj):
         # Acceso rápido a datos ya cargados con select_related
@@ -81,6 +114,7 @@ class ViajeSerializer(serializers.ModelSerializer):
     ofertas_count = serializers.SerializerMethodField()
     ofertas = OfertaSerializer(many=True, read_only=True)
     distancia_km = serializers.SerializerMethodField()
+    pasajero_foto = serializers.SerializerMethodField()
 
     class Meta:
         model = Viaje
@@ -88,9 +122,15 @@ class ViajeSerializer(serializers.ModelSerializer):
             'id', 'origen_lat', 'origen_lon', 'destino_lat', 'destino_lon',
             'cantidad_pasajeros', 'costo_estimado', 'costo_final', 'estado', 
             'pasajero_nombre', 'mototaxista_nombre', 'ofertas_count', 'ofertas', 
-            'distancia_km', 'referencia',
+            'distancia_km', 'referencia', 'pasajero_foto',
         ]
         read_only_fields = ['pasajero']
+    
+    def get_pasajero_foto(self, obj):
+        request = self.context.get("request")
+        if obj.pasajero and obj.pasajero.foto:
+            return request.build_absolute_uri(obj.pasajero.foto.url)
+        return None
     
     def create(self, validated_data):
         user = self.context['request'].user

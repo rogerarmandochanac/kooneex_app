@@ -1,0 +1,46 @@
+<PendienteItem@MDCard>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: dp(250)
+    padding: dp(15)
+    radius: [14]
+    md_bg_color: 0.98, 0.97, 0.95, 1
+    elevation: 0
+
+    BoxLayout:
+        orientation: "horizontal"
+        spacing: dp(10)
+
+        MDBoxLayout:
+            orientation: "vertical"
+            spacing: dp(3)
+
+            MDLabel:
+                text: "Usuario: [b]{}[/b]".format(root.pasajero_nombre)
+                markup: True
+
+            MDLabel:
+                text: "Pasajeros: {}".format(root.cantidad_pasajeros)
+
+            MDLabel:
+                text: "Tarifa sugerida: ${}".format(root.costo_estimado)
+
+            MDLabel:
+                text: "Distancia: {} km".format(root.distancia_km)
+
+        FitImage:
+            source: root.pasajero_foto or "assets/user_placeholder.png"
+            size_hint: None, None
+            size: dp(80), dp(80)
+            radius: [40]
+
+    MDTextField:
+        hint_text: "Tu tarifa"
+        text: root.costo_estimado
+        size_hint_y: None
+        height: dp(50)
+
+    MDRaisedButton:
+        text: "Sugerir tarifa"
+        pos_hint: {"center_x": .5}
+        on_release: root.sugerir()

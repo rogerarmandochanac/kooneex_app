@@ -1,4 +1,6 @@
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 
 from .views import (
     UsuarioViewSet,
@@ -25,8 +27,7 @@ urlpatterns = [
     # Usuario autenticado
     path('usuario/', UsuarioActualAPIView.as_view(), name='usuario_actual'),
 
-    # Registro de usuarios
-    path('registro/', RegistroUsuarioAPIView.as_view(), name='registro'),
+    path("usuarios/registro/", RegistroUsuarioAPIView.as_view(), name="registro"),
 
     # Autenticación JWT
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -35,3 +36,9 @@ urlpatterns = [
     # Endpoints del sistema
     path('', include(router.urls)),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(
+        settings.MEDIA_URL,
+        document_root=settings.MEDIA_ROOT
+    )

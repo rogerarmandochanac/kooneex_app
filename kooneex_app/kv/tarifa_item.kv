@@ -1,0 +1,47 @@
+<TarifaItem@MDCard>:
+    orientation: "vertical"
+    padding: dp(12)
+    spacing: dp(8)
+    size_hint_y: None
+    height: dp(190)
+    radius: [14]
+    elevation: 0
+    md_bg_color: 0.98, 0.97, 0.95, 1
+
+    oferta_id: 0
+    mototaxista_nombre: ""
+    monto: ""
+    tiempo_estimado: ""
+    mototaxista_foto: ""
+
+
+    MDBoxLayout:
+        spacing: dp(8)
+
+        MDBoxLayout:
+            orientation: "vertical"
+            spacing: dp(4)
+
+            MDLabel:
+                text: "Mototaxista: [b]{}[/b]".format(root.mototaxista_nombre)
+                markup: True
+
+            MDLabel:
+                text: "Tarifa sugerida: [b]{}[/b]".format(root.monto)
+                markup: True
+
+            MDLabel:
+                text: "Tiempo estimado: [b]{}[/b]".format(root.tiempo_estimado)
+                markup: True
+
+        FitImage:
+            source: root.mototaxista_foto or "assets/user_placeholder.png"
+            size_hint: None, None
+            size: dp(80), dp(80)
+            radius: [40]
+
+    MDRaisedButton:
+        text: "Aceptar"
+        md_bg_color: 0.2, 0.2, 0.2, 1
+        on_release:
+            app.root.get_screen("tarifas").aceptar_oferta(root.oferta_id)

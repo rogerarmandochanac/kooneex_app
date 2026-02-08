@@ -48,7 +48,7 @@
             LoginMDTextField:
                 id: txt_password
                 hint_text: "Contraseña"
-                password: not root.show_password  # cambia dinámicamente
+                password: True
                 icon_right: "eye" if not root.show_password else "eye-off"
                 on_text: root.password = self.text
             MDRaisedButton:
@@ -58,6 +58,13 @@
                 font_name: root.font_style
                 pos_hint: {"center_x": 0.5}
                 on_release: root.login()
+            MDTextButton:
+                text: "Crear cuenta"
+                theme_text_color: "Custom"
+                text_color: 1, 1, 1, 1
+                pos_hint: {"center_x": 0.5}
+                bold: True
+                on_release: root.manager.current = "registro"
             MDLabel:
                 id: mensaje_label
                 text: root.mensaje

@@ -58,13 +58,10 @@
                         mode: "rectangle"
                         multiline: True
                         size_hint_y: 1
-
-        MDRaisedButton:
-            text: "Solicitar viaje"
-            size_hint: 0.6, None
-            height: dp(48)
-            pos_hint: {"center_x": 0.5, "y": 0.05}
-            md_bg_color: 0, 0.5, 0.2, 1
+        MDFloatingActionButton:
+            icon: "check"
+            md_bg_color: 0, 0.7, 0, 1
+            pos_hint: {"right": 0.95, "y": 0.05}
             on_release: root.solicitar_viaje()
 
         # --- MENSAJE ---

@@ -255,7 +255,9 @@ class ViajeEnCursoMotoScreen(MDScreen):
             resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
 
             if resp.status_code in [200, 202]:
+                self.manager.get_screen('pendientes').cargar_viajes_pendientes()
                 self.manager.current = "pendientes"
+                return
             else:
                 self.ids.info_label.text = f"❌ Error al completar: {resp.text}"
 

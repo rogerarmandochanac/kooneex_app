@@ -3,7 +3,8 @@ from .serializers import (UsuarioSerializer,
                           MototaxiSerializer, 
                           ViajeSerializer, 
                           PagoSerializer, 
-                          OfertaSerializer
+                          OfertaSerializer,
+                          UsuarioRegistroSerializer
                         )
 from .permissions import IsAdmin
 from django.db.models import Prefetch, Exists, OuterRef, Case, When, Value, IntegerField
@@ -28,6 +29,7 @@ from rest_framework import (viewsets,
                             permissions,
                             status,
                             serializers)
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from django.db.models import Q
 
@@ -37,6 +39,21 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
     permission_classes = [IsAdmin]
+
+class RegistroUsuarioAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []  # 🔥 evita CSRF
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        serializer = UsuarioRegistroSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"mensaje": "Usuario creado correctamente"},
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UsuarioActualAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -117,12 +134,17 @@ class ViajeViewSet(viewsets.ModelViewSet):
     ).only(
         'id', 'estado', 'origen_lat', 'origen_lon', 'destino_lat', 'destino_lon',
         'cantidad_pasajeros', 'costo_estimado', 'costo_final','pasajero__username', 
-        'mototaxista__id', 'mototaxista__username', 'referencia', 'distancia_km'
+        'mototaxista__id', 'mototaxista__username', 'referencia', 'distancia_km', 'pasajero__foto'
     )
     
     queryset = base_queryset
     serializer_class = ViajeSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
 
     def get_queryset(self):
         user = self.request.user
@@ -294,7 +316,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
             status=status.HTTP_204_NO_CONTENT
         )
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['patch'])
     def completar(self, request, pk=None):
         """Completar viaje - optimizado"""
         with transaction.atomic():
@@ -341,7 +363,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
         'viaje__id', 'viaje__estado', 'viaje__costo_final', 'viaje__cantidad_pasajeros',
         'mototaxista__id', 'mototaxista__username',
         'mototaxista__first_name', 'mototaxista__last_name',
-        'viaje__pasajero__id', 'viaje__pasajero__username'
+        'viaje__pasajero__id', 'viaje__pasajero__username', 'mototaxista__foto'
     )
     serializer_class = OfertaSerializer
     permission_classes = [IsAuthenticated]
@@ -478,6 +500,11 @@ class OfertaViewSet(viewsets.ModelViewSet):
                 'oferta_id': pk,
                 'mototaxista': user.username,
             }, status=status.HTTP_200_OK)
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
             
 class PagoViewSet(viewsets.ModelViewSet):
     queryset = Pago.objects.all()
@@ -508,31 +535,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'username': self.user.username,
             'rol': self.user.rol,
             'telefono': self.user.telefono,
-            'direccion': self.user.direccion,
         }
         return data
-
-class RegistroUsuarioAPIView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        data = request.data
-        username = data.get('username')
-        password = data.get('password')
-        email = data.get('email')
-        rol = data.get('rol', 'pasajero')  # por defecto pasajero
-
-        if not username or not password:
-            return Response({'error': 'Username y password son obligatorios.'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        if rol not in ['admin', 'mototaxista', 'pasajero']:
-            return Response({'error': 'Rol no válido.'},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        user = Usuario.objects.create_user(username=username, email=email, password=password, rol=rol)
-        return Response({'mensaje': f'Usuario {username} creado como {rol} correctamente.'},
-                        status=status.HTTP_201_CREATED)
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer

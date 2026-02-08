@@ -3,6 +3,11 @@ from kivymd.uix.screen import MDScreen
 from kivy.properties import StringProperty, BooleanProperty
 from helpers import get_headers, save_headers
 from config import API_URL
+from kivymd.uix.relativelayout import MDRelativeLayout
+
+class ClickableTextFieldRound(MDRelativeLayout):
+    text = StringProperty()
+    hint_text = StringProperty()
 
 class LoginScreen(MDScreen):
     username = StringProperty("")
@@ -81,9 +86,7 @@ class LoginScreen(MDScreen):
 
             if not resp.ok:
                 print("Error al obtener viajes:", resp.text)
-                self.manager.get_screen('pendientes').cargar_viajes_pendientes()
                 self.manager.current = "pendientes"
-                return
 
             data = resp.json()
             mensaje = data.get("mensaje")
@@ -97,14 +100,11 @@ class LoginScreen(MDScreen):
                 self.manager.current = "viaje_en_curso_moto"
 
             elif mensaje == "tiene_viaje_ofertado":
-                self.manager.get_screen("pendientes").mostrar_espera_respuesta(
-                    data.get("viaje_id")
-                )
-                self.manager.current = "pendientes"
+                screen = self.manager.get_screen("espera_respuesta")
+                screen.viaje_id = data.get("viaje_id")
+                self.manager.current = "espera_respuesta"
 
             else:  # None u otro valor
-                screen = self.manager.get_screen("pendientes")
-                screen.cargar_viajes_pendientes()
                 self.manager.current = "pendientes"
 
         except requests.exceptions.RequestException as e:

@@ -39,6 +39,7 @@
 
 
             MDRaisedButton:
+                id: btn_completar
                 text: "Marcar viaje como completado"
                 md_bg_color: 0.2, 0.2, 0.2, 1
                 text_color: 1, 1, 1, 1
@@ -47,4 +48,5 @@
                 height: "60dp"
                 pos_hint: {"center_x": 0.5}
                 elevation: 2
+                opacity: 1
                 on_release: root.marcar_completado()

@@ -1,0 +1,88 @@
+<RegistroScreen>:
+    name:"registro"
+    md_bg_color : 0.9686, 0.5765, 0.1176, 1
+    theme_text_color: "Custom"
+    text_color: 1, 1, 1, 1
+    font_style : "Poppins"
+
+    MDBoxLayout:
+        orientation: "vertical"
+        padding: dp(20), dp(10), dp(20), dp(10)
+
+        MDLabel:
+            text: "Crear cuenta"
+            halign: "center"
+            font_style: "H5"
+            theme_text_color: "Custom"
+            text_color: 1, 1, 1, 1
+            bold: True
+        
+        MDTextField:
+            hint_text: "Username"
+            on_text: root.username = self.text
+        
+        MDTextField:
+            id: rol_input
+            hint_text: "Tipo de usuario"
+            text: root.rol
+            readonly: True
+            on_focus: if self.focus: root.abrir_menu_roles()
+                    
+        MDTextField:
+            hint_text: "Nombre(s)"
+            on_text: root.nombre = self.text
+        
+        MDTextField:
+            hint_text: "Apellido(s)"
+            on_text: root.apellido = self.text
+        
+        MDTextField:
+            hint_text: "Correo Electronico"
+            on_text: root.correo = self.text
+        
+        MDTextField:
+            hint_text: "Telefono"
+            on_text: root.telefono = self.text
+
+        MDTextField:
+            hint_text: "Contraseña"
+            password: True
+            on_text: root.password = self.text
+        
+        BoxLayout:
+            orientation: "vertical"
+
+            Image:
+                id: foto_preview
+                source: ""
+                allow_stretch: True
+                keep_ratio: True
+
+            Button:
+                text: "Tomar Foto"
+                on_release: root.seleccionar_foto()
+
+        MDBoxLayout:
+            orientation: "horizontal"
+            spacing: dp(10)
+
+            MDRaisedButton:
+                text: "Registrarse"
+                size_hint_x: 0.4
+                on_release: root.registrar()
+                halign: "center"
+                md_bg_color: 0, 0.5, 0.2, 1
+            
+            MDRaisedButton:
+                text: "Cancelar"
+                size_hint_x: 0.4
+                on_release: root.manager.current = "login"
+                halign: "center"
+                md_bg_color: 0.85, 0.2, 0.2, 1
+        
+        MDLabel:
+            text: root.mensaje
+            halign: "center"
+            theme_text_color: "Custom"
+            text_color: 1, 1, 1, 1
+    
