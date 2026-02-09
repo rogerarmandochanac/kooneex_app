@@ -10,6 +10,9 @@ from kivy.utils import platform
 import os
 from helpers import get_headers
 import re
+from kivy.properties import BooleanProperty
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.button import MDFlatButton
 
 class RegistroScreen(MDScreen):
     username = StringProperty("")
@@ -21,14 +24,36 @@ class RegistroScreen(MDScreen):
     rol = StringProperty("pasajero")  # valor por defecto
     mensaje = StringProperty("")
     foto_path = None
+    foto_cargada = BooleanProperty(False)
+    dialog = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.file_manager = MDFileManager(
             exit_manager=self.cerrar_filemanager,
             select_path=self.seleccionar_path,
-            preview=True,
+            preview=False,
         )
+    
+    def mostrar_error(self, mensaje):
+        if not self.dialog:
+            self.dialog = MDDialog(
+                title="Error",
+                text=mensaje,
+                buttons=[
+                    MDFlatButton(
+                        text="OK",
+                        on_release=lambda x: self.cerrar_dialogo()
+                    )
+                ],
+            )
+        else:
+            self.dialog.text = mensaje
+
+        self.dialog.open()
+
+    def cerrar_dialogo(self):
+        self.dialog.dismiss()
     
     def abrir_menu_roles(self):
         items = [
@@ -85,8 +110,7 @@ class RegistroScreen(MDScreen):
         print("📸 Foto guardada en:", path)
         self.foto_path = path
         # Mostrar preview
-        self.ids.foto_preview.source = path
-        self.ids.foto_preview.reload()
+        self.foto_cargada = True
 
     def cerrar_filemanager(self, *args):
         self.file_manager.close()
@@ -99,10 +123,7 @@ class RegistroScreen(MDScreen):
             print("❌ No es una imagen")
             return
         self.foto_path = path
-        # Mostrar preview
-        self.ids.foto_preview.source = path
-        self.ids.foto_preview.reload()
-
+        self.foto_cargada = True
         print("📸 Imagen seleccionada:", path)
 
     def es_imagen(self, path):
@@ -118,6 +139,10 @@ class RegistroScreen(MDScreen):
         return re.match(patron, email) is not None
     
     def registrar(self):
+        if not self.foto_cargada or not self.foto_path:
+            self.mostrar_error("Debes tomar o seleccionar una foto antes de registrarte.")
+            return
+        
         files = {
             "foto": open(self.foto_path, "rb")
         }
@@ -134,10 +159,13 @@ class RegistroScreen(MDScreen):
 
         try:
             if not self.validar_telefono(self.telefono):
-                self.mensaje = "El teléfono debe tener 10 dígitos numéricos"
+                self.mostrar_error("El teléfono debe tener 10 dígitos numéricos")
+                return
+                #self.mensaje = "El teléfono debe tener 10 dígitos numéricos"
             
             elif not self.validar_email(self.correo):
-                self.mensaje = "Correo electrónico inválido"
+                self.mostrar_error("Correo electrónico inválido")
+                #self.mensaje = "Correo electrónico inválido"
                 return
 
             else:
