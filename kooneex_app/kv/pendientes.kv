@@ -1,16 +1,50 @@
 <PendientesScreen>:
     BoxLayout:
         orientation: "vertical"
+        AnchorLayout:
+            RecycleView:
+                id: rv_viajes
+                viewclass: "PendienteItem"
+                bar_width: dp(4)
 
-        RecycleView:
-            id: rv_viajes
-            viewclass: "PendienteItem"
-            bar_width: dp(4)
+                RecycleBoxLayout:
+                    orientation: "vertical"
+                    default_size: None, dp(260)
+                    default_size_hint: 1, None
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: dp(12)
+            
+            AnchorLayout:
+                anchor_x: "center"
+                anchor_y: "center"
 
-            RecycleBoxLayout:
-                orientation: "vertical"
-                default_size: None, dp(260)
-                default_size_hint: 1, None
-                size_hint_y: None
-                height: self.minimum_height
-                spacing: dp(12)
+                MDBoxLayout:
+                    orientation: "vertical"
+                    spacing: dp(12)
+                    size_hint: None, None
+                    width: dp(300)
+                    height: self.minimum_height
+                    padding: dp(20)
+                    opacity: 0 if rv_viajes.data else 1
+
+                    MDSpinner:
+                        size_hint: None, None
+                        size: "46dp", "46dp"
+                        pos_hint: {"center_x": .5, "center_y": .5}
+                        active: True
+                        color: 0.9686, 0.5765, 0.1176, 1
+
+                    MDLabel:
+                        text: "Aún no hay solictudes disponibles"
+                        halign: "center"
+                        font_style: "H6"
+                        size_hint_y: None
+                        height: self.texture_size[1]
+
+                    MDLabel:
+                        text: "Las nuevas solicitudes aparecerán aquí automáticamente."
+                        halign: "center"
+                        theme_text_color: "Secondary"
+                        size_hint_y: None
+                        height: self.texture_size[1]
