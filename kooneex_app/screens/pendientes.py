@@ -13,6 +13,7 @@ from kivymd.uix.card import MDCard
 from kivy.properties import StringProperty, NumericProperty
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton
+from kivy.app import App
 
 class PendienteItem(MDCard):
     viaje_id = NumericProperty()
@@ -41,7 +42,8 @@ class PendienteItem(MDCard):
         self.dialog.open()
 
     def sugerir(self):
-        screen = self.parent.parent.parent.parent
+        app = App.get_running_app()
+        screen = app.root.get_screen("pendientes")
         screen.sugerir_tarifa(self.viaje_id, self.costo_estimado)
 
 class PendientesScreen(MDScreen):
