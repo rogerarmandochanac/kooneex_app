@@ -16,59 +16,123 @@
 
     MDFloatLayout:
         md_bg_color: root.background_orange_color
-        MDBoxLayout:
-            orientation: 'vertical'
-            spacing: "24dp"
-            padding: "40dp"
-            size_hint: 0.9, 0.7
-            pos_hint: {"center_x": 0.5, "center_y": 0.5}
-            Image:
-                source: "assets/kooneex_logo.png"
-                size_hint: (0.8, None)
-                height: "150dp"
-                allow_stretch: True
-                keep_ratio: True
-                pos_hint: {"center_x": 0.5}
-            MDLabel:
-                text: "Iniciar Sesión"
-                halign: "center"
-                valign: "middle"
-                size_hint_y: None
-                height: self.texture_size[1]
-                font_name: root.font_style
-                bold: True
-                font_style: "H5"
-                theme_text_color: "Custom"
-                text_color: root.font_white_color
-            LoginMDTextField:
-                id: txt_username
-                hint_text: "Usuario"
-                icon_right: "account"
-                on_text: root.username = self.text #Cuando se escribe en el input se guarda la variable 
-            LoginMDTextField:
-                id: txt_password
-                hint_text: "Contraseña"
-                password: True
-                icon_right: "eye" if not root.show_password else "eye-off"
-                on_text: root.password = self.text
-            MDRaisedButton:
-                text: "Ingresar"
-                md_bg_color: root.font_white_color
-                text_color: 0.9686, 0.5765, 0.1176, 1
-                font_name: root.font_style
-                pos_hint: {"center_x": 0.5}
-                on_release: root.login()
-            MDTextButton:
-                text: "Crear cuenta"
-                theme_text_color: "Custom"
-                text_color: 1, 1, 1, 1
-                pos_hint: {"center_x": 0.5}
-                bold: True
-                on_release: root.manager.current = "registro"
-            MDLabel:
-                id: mensaje_label
-                text: root.mensaje
-                halign: "center"
-                theme_text_color: "Custom"
-                text_color: root.font_white_color
-                font_name: root.font_style
+
+        AnchorLayout:
+            anchor_x: "center"
+            anchor_y: "center"
+
+            MDBoxLayout:
+                orientation: "vertical"
+                spacing: "35dp"
+                padding: "40dp"
+                size_hint: 0.9, None
+                height: self.minimum_height
+
+                # 🔝 HEADER
+                BoxLayout:
+                    orientation:'vertical'
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: "15dp"
+                    Image:
+                        source: "assets/logo_blanco.png"
+                        size_hint: (1, None)
+                        height: "120dp"
+
+                    MDLabel:
+                        text: "Iniciar Sesión"
+                        halign: "center"
+                        bold: True
+                        font_style: "H5"
+                        theme_text_color: "Custom"
+                        text_color: root.font_white_color
+                        size_hint_y: None
+                        height: self.texture_size[1]
+
+                # 🧾 FORMULARIO
+                BoxLayout:
+                    orientation:'vertical'
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: "15dp"
+                    LoginMDTextField:
+                        id: txt_username
+                        hint_text: "Usuario"
+                        icon_right: "account"
+                        on_text: root.username = self.text
+
+                    LoginMDTextField:
+                        id: txt_password
+                        hint_text: "Contraseña"
+                        password: True
+                        icon_right: "eye"
+                        on_text: root.password = self.text
+
+                # 🔘 BOTONES
+                BoxLayout:
+                    orientation:'vertical'
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: "15dp"
+                    Button:
+                        text: "Ingresar"
+                        size_hint_y: None
+                        height: dp(45)
+                        size_hint_x: 1
+                        font_name: root.font_style
+                        color: 0.9686, 0.5765, 0.1176, 1
+                        background_normal: ""
+                        background_down: ""
+                        background_color: 0, 0, 0, 0
+
+                        canvas.before:
+                            Color:
+                                rgba: (0.95, 0.95, 0.95, 1) if self.state == "down" else (1, 1, 1, 1)
+                            RoundedRectangle:
+                                pos: self.pos
+                                size: self.size
+                                radius: [25, 25, 25, 25]
+
+                        canvas.after:
+                            Color:
+                                rgba: 0.9686, 0.5765, 0.1176, 1
+                            Line:
+                                width: 1.5
+                                rounded_rectangle: (self.x, self.y, self.width, self.height, 25)
+
+                        on_release: root.login()
+
+                    Button:
+                        text: "Crear Cuenta"
+                        size_hint_y: None
+                        height: dp(45)
+                        size_hint_x: 1
+                        font_name: root.font_style
+                        color: 1, 1, 1, 1
+                        background_normal: ""
+                        background_down: ""
+                        background_color: 0, 0, 0, 0
+
+                        canvas.before:
+                            Color:
+                                rgba: (0.9, 0.5, 0.1, 1) if self.state == "down" else (0.85, 0.45, 0.05, 1)
+                            RoundedRectangle:
+                                pos: self.pos
+                                size: self.size
+                                radius: [25, 25, 25, 25]
+
+                        on_release: root.manager.current = "registro"
+
+                BoxLayout:
+                    orientation:'vertical'
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: "30dp"
+
+                    MDLabel:
+                        id: mensaje_label
+                        text: root.mensaje
+                        halign: "center"
+                        theme_text_color: "Custom"
+                        text_color: root.font_white_color
+                        font_name: root.font_style

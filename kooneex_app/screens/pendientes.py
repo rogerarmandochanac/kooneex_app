@@ -11,6 +11,8 @@ from config import API_URL
 from kivymd.uix.fitimage import FitImage
 from kivymd.uix.card import MDCard
 from kivy.properties import StringProperty, NumericProperty
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.button import MDFlatButton
 
 class PendienteItem(MDCard):
     viaje_id = NumericProperty()
@@ -19,6 +21,24 @@ class PendienteItem(MDCard):
     cantidad_pasajeros = NumericProperty(1)
     costo_estimado = StringProperty("")
     distancia_km = StringProperty("")
+    referencia = StringProperty("")
+    dialog = None
+
+    def mostrar_referencia(self):
+        if not self.referencia:
+            return
+
+        self.dialog = MDDialog(
+            title="Referencia del viaje",
+            text=self.referencia,
+            buttons=[
+                MDFlatButton(
+                    text="CERRAR",
+                    on_release=lambda x: self.dialog.dismiss()
+                )
+            ],
+        )
+        self.dialog.open()
 
     def sugerir(self):
         screen = self.parent.parent.parent.parent
@@ -37,7 +57,6 @@ class PendientesScreen(MDScreen):
 
         headers = get_headers()
         resp = requests.get(f"{API_URL}/viajes/", headers=headers)
-
         if resp.status_code != 200:
             return
 
@@ -51,6 +70,7 @@ class PendientesScreen(MDScreen):
                 "cantidad_pasajeros": v.get("cantidad_pasajeros", 1),
                 "costo_estimado": str(v.get("costo_estimado", "")),
                 "distancia_km": str(v.get("distancia_km", 0)),
+                "referencia": str(v.get("referencia")),
             }
             for v in viajes
         ]

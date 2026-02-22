@@ -122,7 +122,7 @@ class ViajeSerializer(serializers.ModelSerializer):
             'id', 'origen_lat', 'origen_lon', 'destino_lat', 'destino_lon',
             'cantidad_pasajeros', 'costo_estimado', 'costo_final', 'estado', 
             'pasajero_nombre', 'mototaxista_nombre', 'ofertas_count', 'ofertas', 
-            'distancia_km', 'referencia', 'pasajero_foto',
+            'distancia_km', 'referencia', 'pasajero_foto'
         ]
         read_only_fields = ['pasajero']
     
