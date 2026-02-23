@@ -57,6 +57,8 @@
         text: root.costo_estimado
         size_hint_y: None
         height: dp(50)
+        on_text:
+            root.costo_estimado = self.text
 
     Button:
         text: "Sugerir tarifa"

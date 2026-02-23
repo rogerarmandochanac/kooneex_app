@@ -150,7 +150,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         if user.rol == 'pasajero':
-            return self.base_queryset.filter(pasajero=user).order_by('-distancia_km')
+            return self.base_queryset.filter(pasajero=user).exclude(estado='completado').order_by('-distancia_km')
         
         elif user.rol == 'mototaxista':
             oferta_activa_subquery = Oferta.objects.filter(

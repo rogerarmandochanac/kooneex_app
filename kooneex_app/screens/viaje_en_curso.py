@@ -2,6 +2,9 @@ import requests
 from kivymd.uix.screen import MDScreen
 from config import API_URL
 from helpers import get_headers
+from kivy.animation import Animation
+from kivy.graphics import Translate
+from kivy.clock import Clock
 
 class ViajeEnCursoScreen(MDScreen):
     """Pantalla pasajero donde se aprecia el viaje en curso"""
@@ -22,11 +25,17 @@ class ViajeEnCursoScreen(MDScreen):
                     if viaje['estado'] == 'en_curso':
                         self.ids.info_label.text = f"El mototaxista [b]{viaje.get('mototaxista_nombre')}[/b] esta en camino favor de estar pendiente."
                         self.ids.btn_completar.opacity = 1
+                        self.ids._spinner_en_curso.opacity = 0
+                        self.ids.img_en_curso.opacity = 1
+                        self.animar_moto()
                     else:
                         self.ids.info_label.text = (
                             f"Solicitud enviada al mototaxista {viaje.get('mototaxista_nombre')}, esperando a que inicie el viaje."
                         )
                         self.ids.btn_completar.opacity = 0
+                        self.ids._spinner_en_curso.opacity = 1
+                        self.ids.img_en_curso.opacity = 0
+
             else:
                 self.ids.info_label.text = "Error al cargar el viaje."
 
@@ -34,6 +43,31 @@ class ViajeEnCursoScreen(MDScreen):
             self.ids.info_label.text = "No hay viaje activo."
         except Exception as e:
             self.ids.info_label.text = f"Error: {e}"
+    
+    def on_kv_post(self, base_widget):
+        Clock.schedule_once(lambda dt: self.animar_moto(), 0)
+    
+    def animar_moto(self):
+        img = self.ids.img_en_curso
+        container = self.ids.anim_container
+
+        img.x = -img.width
+
+        def mover(*args):
+            anim = Animation(
+                x=container.width,
+                duration=3,
+                t='linear'
+            )
+
+            def reiniciar(*_):
+                img.x = -img.width
+                mover()
+
+            anim.bind(on_complete=reiniciar)
+            anim.start(img)
+
+        mover()
     
     def marcar_completado(self):
         """Permite al pasajero marcar su viaje como completado"""

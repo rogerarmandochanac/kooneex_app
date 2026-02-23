@@ -56,6 +56,7 @@ class LoginScreen(MDScreen):
         try:
             resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=get_headers(), timeout=10)
             data = resp.json()
+            print(data)
             if resp.ok:
                 if data.get("mensaje") == "tiene_viaje_activo":
                     viaje_en_curso = self.manager.get_screen("viaje_en_curso")
