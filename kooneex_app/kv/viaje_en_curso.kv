@@ -1,52 +1,50 @@
 <ViajeEnCursoScreen>:
     name: "viaje_en_curso"
+    
     MDFloatLayout:
-        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
+        md_bg_color: 1, 1, 1, 1
 
-        MDCard:
-            id: info_card
-            size_hint: None, None
-            size: "320dp", "200dp"
-            pos_hint: {"center_x": 0.5, "center_y": 0.5}
-            md_bg_color: 1, 1, 1, 1
+        AnchorLayout:
+            anchor_x: "center"
+            anchor_y: "center"
 
             MDBoxLayout:
-                padding: "16dp"
                 orientation: "vertical"
+                spacing: "20dp"
+                adaptive_height: True
+                size_hint_x: .9
 
-                Image:
-                    source: "assets/moto_koonex.png"
+                MDSpinner:
                     size_hint: None, None
-                    size: "90dp", "90dp"
-                    allow_stretch: True
-                    keep_ratio: True
-                    pos_hint: {"center_x": 0.5}
+                    size: "46dp", "46dp"
+                    pos_hint: {"center_x": .5}
+                    active: True
+                    color: 0.9686, 0.5765, 0.1176, 1
 
                 MDLabel:
                     id: info_label
                     text: "Cargando información del viaje..."
                     halign: "center"
-                    valign: "middle"
-                    theme_text_color: "Custom"
-                    text_color: 0.9686, 0.5765, 0.1176, 1
                     font_style: "H6"
-                    markup:True
+                    size_hint_y: None
+                    height: self.texture_size[1]
 
-        BoxLayout:
+        MDBoxLayout:
             orientation: "vertical"
-            padding: 20
-            spacing: 10
-
+            padding: "20dp"
+            spacing: "10dp"
+            size_hint_y: None
+            height: "100dp"
+            pos_hint: {"center_x": 0.5, "y": 0.05}
 
             MDRaisedButton:
                 id: btn_completar
                 text: "Marcar viaje como completado"
                 md_bg_color: 0.2, 0.2, 0.2, 1
                 text_color: 1, 1, 1, 1
-                size_hint_x:0.9
-                size_hint_y:None
+                size_hint_x: 0.9
+                size_hint_y: None
                 height: "60dp"
                 pos_hint: {"center_x": 0.5}
                 elevation: 2
-                opacity: 1
                 on_release: root.marcar_completado()

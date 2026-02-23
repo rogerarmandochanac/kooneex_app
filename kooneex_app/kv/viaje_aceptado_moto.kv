@@ -1,40 +1,61 @@
 <ViajeAceptadoMotoScreen>:
     name: "viaje_aceptado_moto"
+
     MDFloatLayout:
-        md_bg_color: 0.9686, 0.5765, 0.1176, 1  # #F7931E
-        
-        MDCard:
-            id: info_card
-            size_hint: None, None
-            size: "320dp", "200dp"
-            pos_hint: {"center_x": 0.5, "center_y": 0.5}
-            md_bg_color: 1, 1, 1, 1
+        md_bg_color: 1, 1, 1, 1  # fondo blanco
+
+        AnchorLayout:
+            anchor_x: "center"
+            anchor_y: "center"
 
             MDBoxLayout:
                 orientation: "vertical"
-                padding: "16dp"
-                spacing: "8dp"
-        
+                spacing: dp(20)
+                size_hint: None, None
+                width: dp(320)
+                height: self.minimum_height
+                padding: dp(25)
+
+                Image:
+                    source: "assets/moto_koonex.png"
+                    size_hint: None, None
+                    size: dp(90), dp(90)
+                    pos_hint: {"center_x": .5}
+                    allow_stretch: True
+                    keep_ratio: True
+
                 MDLabel:
                     id: info_label
                     text: "Cargando viaje en curso..."
-                    theme_text_color:"Custom"
-                    text_color: 0.9686, 0.5765, 0.1176, 1
-                    font_style:"H6"
-                    size_hint_x: .9
-                    halign:"center"
-                    pos_hint: {"center_x": 0.5}
+                    halign: "center"
+                    font_style: "H6"
+                    theme_text_color: "Custom"
+                    text_color: 0.2, 0.2, 0.2, 1  # gris oscuro elegante
+                    size_hint_y: None
+                    height: self.texture_size[1]
 
-        MDBoxLayout:
-            size_hint: 1, None
-            height: "80dp"
-            padding: ["16dp", "0dp", "16dp", "0dp"]  # izquierda, arriba, derecha, abajo
-            pos_hint: {"center_x": 0.5, "y": 0.05}
+                Widget:
+                    size_hint_y: None
+                    height: dp(10)
 
-            MDRaisedButton:
-                id: btn_iniciar
-                text: "Iniciar viaje"
-                md_bg_color: 0.2, 0.2, 0.2, 1
-                size_hint: 1, None
-                height: "56dp"
-                on_release: root.iniciar_viaje()
+                Button:
+                    text: "Iniciar viaje"
+                    size_hint_y: None
+                    height: dp(50)
+
+                    font_name: "Poppins"
+                    color: 1, 1, 1, 1  # texto blanco
+
+                    background_normal: ""
+                    background_down: ""
+                    background_color: 0, 0, 0, 0
+
+                    canvas.before:
+                        Color:
+                            rgba: (0.85, 0.45, 0.05, 1) if self.state == "down" else (0.9686, 0.5765, 0.1176, 1)
+                        RoundedRectangle:
+                            pos: self.pos
+                            size: self.size
+                            radius: [25, 25, 25, 25]
+
+                    on_release: root.iniciar_viaje()
