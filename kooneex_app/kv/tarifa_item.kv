@@ -7,41 +7,81 @@
     radius: [14]
     elevation: 0
     md_bg_color: 0.98, 0.97, 0.95, 1
-
     oferta_id: 0
     mototaxista_nombre: ""
     monto: ""
-    tiempo_estimado: ""
     mototaxista_foto: ""
-
+    
+    canvas.after:
+        Color:
+            rgba: 0, 0, 0, 0.08   # gris muy sutil estilo material
+        Rectangle:
+            pos: self.x + dp(16), self.y
+            size: self.width - dp(32), dp(1)
 
     MDBoxLayout:
         spacing: dp(8)
 
-        MDBoxLayout:
-            orientation: "vertical"
-            spacing: dp(4)
+        AnchorLayout:
+            anchor_x: 'center'
+            anchor_y: 'center'
 
-            MDLabel:
-                text: "Mototaxista: [b]{}[/b]".format(root.mototaxista_nombre)
-                markup: True
+            AnchorLayout:
+                anchor_x:'left'
+                anchor_y:'center'
 
-            MDLabel:
-                text: "Tarifa sugerida: [b]{}[/b]".format(root.monto)
-                markup: True
+                BoxLayout:
+                    orientation:'vertical'
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: dp(4)
+                    MDLabel:
+                        text: "[b]Mototaxista:[/b] {}".format(root.mototaxista_nombre)
+                        markup: True
+                        size_hint_y: None
+                        height: self.texture_size[1]
 
-            MDLabel:
-                text: "Tiempo estimado: [b]{}[/b]".format(root.tiempo_estimado)
-                markup: True
+                    MDLabel:
+                        text: "[b]Tarifa sugerida:[/b] ${} MXN".format(root.monto)
+                        markup: True
+                        size_hint_y: None
+                        height: self.texture_size[1]
 
-        FitImage:
-            source: root.mototaxista_foto or "assets/user_placeholder.png"
-            size_hint: None, None
-            size: dp(80), dp(80)
-            radius: [40]
+            AnchorLayout:
+                anchor_x:'right'
+                anchor_y:'center'
 
-    MDRaisedButton:
+                FitImage:
+                    source: root.mototaxista_foto or "assets/user_placeholder.png"
+                    size_hint: None, None
+                    size: dp(80), dp(80)
+                    radius: [40]
+                    canvas.after:
+                        Color:
+                            rgba: 0.9686, 0.5765, 0.1176, 1
+                        Line:
+                            width: 1.5
+                            rounded_rectangle: (self.x, self.y, self.width, self.height, 40)
+
+    Button:
         text: "Aceptar"
-        md_bg_color: 0.2, 0.2, 0.2, 1
-        on_release:
-            app.root.get_screen("tarifas").aceptar_oferta(root.oferta_id)
+        size_hint_x: .5
+        pos_hint: {"center_x": .5}
+        size_hint_y: None
+        height: dp(40)
+
+        background_normal: ""
+        background_down: ""
+        background_color: 0, 0, 0, 0  # 🔥 MUY IMPORTANTE
+
+        color: 1, 1, 1, 1  # texto blanco
+
+        canvas.before:
+            Color:
+                rgba: (0.85, 0.45, 0.05, 1) if self.state == "down" else (0.9686, 0.5765, 0.1176, 1)
+            RoundedRectangle:
+                pos: self.pos
+                size: self.size
+                radius: [15, 15, 15, 15]
+
+        on_release: app.root.get_screen("tarifas").aceptar_oferta(root.oferta_id)
