@@ -1,4 +1,7 @@
 import requests
+import websocket
+import threading
+import json
 from kivymd.uix.screen import MDScreen
 from config import API_URL
 from helpers import get_headers
@@ -9,6 +12,58 @@ from kivy.clock import Clock
 class ViajeEnCursoScreen(MDScreen):
     """Pantalla pasajero donde se aprecia el viaje en curso"""
     viaje_id = None
+
+    def conectar_websocket(self, viaje_id, token):
+        url = f"ws://127.0.0.1:8000/ws/viaje/{viaje_id}/?token={token}"
+
+        self.ws = websocket.WebSocketApp(
+            url,
+            on_message=self.on_ws_message,
+            on_error=self.on_ws_error,
+            on_close=self.on_ws_close
+        )
+
+        hilo = threading.Thread(target=self.ws.run_forever)
+        hilo.daemon = True
+        hilo.start()
+    
+    def on_ws_message(self, ws, message):
+        data = json.loads(message)
+
+        if data.get("type") == "estado_viaje":
+            estado = data.get("estado")
+
+            # 👇 Muy importante: actualizar UI en hilo principal
+            Clock.schedule_once(lambda dt: self.actualizar_estado(estado, data))
+    
+    def on_ws_error(self, ws, error):
+        print("Error WebSocket:", error)
+
+    def on_ws_close(self, ws, close_status_code, close_msg):
+        print("WebSocket cerrado")
+        
+    def actualizar_estado(self, estado, data):
+        if estado == "en_curso":
+            self.ids._spinner_en_curso.opacity = 0
+            self.ids._spinner_en_curso.active = False
+
+            self.ids.img_en_curso.opacity = 1
+            self.animar_moto()
+
+            self.ids.info_label.text = (
+                f"El mototaxista [b]{data.get('mototaxista')}[/b] está en camino."
+            )
+
+        elif estado == "completado":
+            self.ids.info_label.text = "Viaje completado ✅"
+            self.ids.btn_completar.opacity = 0
+    
+    def on_pre_enter(self):
+        viaje_id = self.viaje_id
+        token = get_headers()["Authorization"].replace("Bearer ", "")
+
+        self.conectar_websocket(viaje_id, token)
+
     def cargar_viaje_en_curso(self):
         
         """Carga la información del viaje en curso del pasajero"""

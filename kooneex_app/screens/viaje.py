@@ -1,5 +1,6 @@
 import requests
 from kivymd.uix.screen import MDScreen
+from kivy.app import App
 from kivymd.uix.menu import MDDropdownMenu
 from kivy.properties import StringProperty, BooleanProperty
 from helpers import get_headers
@@ -146,6 +147,8 @@ class ViajeScreen(MDScreen):
             resp = requests.post(f"{API_URL}/viajes/", json=datos, headers=headers)
 
             if resp.status_code == 201:
+                viaje_id = resp.json().get("id")
+                App.get_running_app().viaje_id = viaje_id
                 self.manager.current = "tarifas"
             else:
                 self.mensaje = f"Error: {resp.text}"

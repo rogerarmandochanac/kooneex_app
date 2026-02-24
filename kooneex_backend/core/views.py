@@ -35,6 +35,9 @@ from django.db.models import Q
 
 from django.db import transaction
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
@@ -122,6 +125,35 @@ class MototaxiViewSet(viewsets.ModelViewSet):
         return Response(cercanos)
 
 class ViajeViewSet(viewsets.ModelViewSet):
+
+    def perform_create(self, serializer):
+        viaje = serializer.save(pasajero_id=self.request.user.id)
+
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            "mototaxistas",
+            {
+                "type": "nuevo_viaje",
+                "data": {
+                    "id": viaje.id,
+                }
+            }
+        )
+
+    def notificar_estado(self, viaje):
+        channel_layer = get_channel_layer()
+
+        async_to_sync(channel_layer.group_send)(
+            f"viaje_{viaje.id}",
+            {
+                "type": "estado_viaje",
+                "estado": viaje.estado,
+                "viaje_id": viaje.id,
+                "mototaxista": viaje.mototaxista.username if viaje.mototaxista else None,
+                "costo_final": float(viaje.costo_final) if viaje.costo_final else None,
+            }
+        )
     
     base_queryset = Viaje.objects.select_related(
         'pasajero', 'mototaxista'
@@ -280,6 +312,10 @@ class ViajeViewSet(viewsets.ModelViewSet):
 
         try:
             viaje.aceptar(user)
+
+            #NOTIFICACIÓN TIEMPO REAL
+            self.notificar_estado(viaje)
+
             return Response({
                 "mensaje": "Viaje aceptado correctamente.",
                 "viaje_id": viaje.id
@@ -305,6 +341,16 @@ class ViajeViewSet(viewsets.ModelViewSet):
 
         try:
             viaje.eliminar()
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                "mototaxistas",
+                {
+                    "type": "nuevo_viaje",
+                    "data": {
+                        "id": viaje.id,
+                    }
+                }
+            )
         except ValidationError as e:
             return Response(
                 {"error": e.message},
@@ -350,6 +396,8 @@ class ViajeViewSet(viewsets.ModelViewSet):
                         'metodo': 'efectivo'
                     }
                 )
+            #NOTIFICACIÓN TIEMPO REAL
+            self.notificar_estado(viaje)
 
             return Response({
                 "mensaje": f"Viaje #{viaje.id} completado correctamente."

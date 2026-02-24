@@ -14,6 +14,10 @@ from kivy.properties import StringProperty, NumericProperty
 from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import MDFlatButton
 from kivy.app import App
+from kivy.clock import Clock
+import websocket
+import threading
+import json
 
 class PendienteItem(MDCard):
     viaje_id = NumericProperty()
@@ -49,8 +53,34 @@ class PendienteItem(MDCard):
 class PendientesScreen(MDScreen):
     """Esta pantalla es para los viajes pendientes en la pantalla del mototaxista"""
 
+    def conectar_ws_mototaxi(self):
+
+        ws_url = "ws://127.0.0.1:8000/ws/mototaxi/"
+
+        def on_message(ws, message):
+            data = json.loads(message)
+            print("🚨 Nuevo viaje recibido:", data)
+
+            # 🔥 Aquí actualizas tu lista
+            Clock.schedule_once(lambda dt: self.cargar_viajes_pendientes())
+
+        def on_open(ws):
+            print("✅ WS mototaxi conectado")
+
+        self.ws = websocket.WebSocketApp(
+            ws_url,
+            on_message=on_message,
+            on_open=on_open
+        )
+
+        hilo = threading.Thread(target=self.ws.run_forever)
+        hilo.daemon = True
+        hilo.start()
+
     def on_enter(self):
+        self.conectar_ws_mototaxi()
         from kivy.clock import Clock
+        
         Clock.schedule_once(self.cargar_viajes_pendientes, 0)
 
     def cargar_viajes_pendientes(self, dt=None):

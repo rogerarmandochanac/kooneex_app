@@ -2,6 +2,7 @@ import requests
 from kivymd.uix.screen import MDScreen
 from config import API_URL
 from helpers import get_headers
+from kivy.app import App
 
 
 class ViajeAceptadoMotoScreen(MDScreen):
@@ -40,11 +41,16 @@ class ViajeAceptadoMotoScreen(MDScreen):
     def iniciar_viaje(self):
         """Permite al mototaxista marcar el viaje como 'en curso'"""
         try:
-            with open("token.txt", "r") as f:
-                token = f.read().strip()
-            with open("viaje_actual.txt", "r") as f:
-                viaje_id = f.read().strip()
+            app = App.get_running_app()
+            token = getattr(app, "token", None)
+            viaje_id = getattr(app, "viaje_id", None)
+            print(token)
+            print(viaje_id)
 
+            if not token or not viaje_id:
+                print("No hay sesión activa")
+                return
+            
             headers = {"Authorization": f"Bearer {token}"}
             datos = {"estado": "en_curso"}
 

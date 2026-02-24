@@ -1,9 +1,13 @@
 import requests
 from kivymd.uix.screen import MDScreen
 from kivy.properties import StringProperty, BooleanProperty
-from helpers import get_headers, save_headers
+from helpers import get_headers
 from config import API_URL
 from kivymd.uix.relativelayout import MDRelativeLayout
+import websocket
+import threading
+import json
+from kivy.app import App
 
 class ClickableTextFieldRound(MDRelativeLayout):
     text = StringProperty()
@@ -28,7 +32,10 @@ class LoginScreen(MDScreen):
             
             if resp.ok:               
                 access_token = resp.json().get("access")
-                headers = save_headers(access_token)
+                App.get_running_app().token = access_token
+                headers = {
+                    "Authorization": f"Bearer {access_token}"
+                }
                 user_resp = requests.get(f"{API_URL}/usuario/", headers=headers, timeout=10)
 
                 if resp.ok:
@@ -56,9 +63,11 @@ class LoginScreen(MDScreen):
         try:
             resp = requests.get(f"{API_URL}/viajes/verificar_viajes_activos/", headers=get_headers(), timeout=10)
             data = resp.json()
-            print(data)
             if resp.ok:
                 if data.get("mensaje") == "tiene_viaje_activo":
+                    viaje_id = data.get("viaje_id")
+                    # 🔥 AQUI agregas esto
+                    self.conectar_websocket(viaje_id)
                     viaje_en_curso = self.manager.get_screen("viaje_en_curso")
                     viaje_en_curso.cargar_viaje_en_curso()
                     self.manager.current = "viaje_en_curso"
@@ -93,11 +102,15 @@ class LoginScreen(MDScreen):
             mensaje = data.get("mensaje")
 
             if mensaje == "tiene_viaje_aceptado":
+                viaje_id = data.get("viaje_id")
+                self.conectar_websocket(viaje_id)
                 screen = self.manager.get_screen("viaje_aceptado_moto")
                 screen.cargar_viaje_en_curso()
                 self.manager.current = "viaje_aceptado_moto"
 
             elif mensaje == "tiene_viaje_en_curso":
+                viaje_id = data.get("viaje_id")
+                self.conectar_websocket(viaje_id)
                 self.manager.current = "viaje_en_curso_moto"
 
             elif mensaje == "tiene_viaje_ofertado":
@@ -113,3 +126,32 @@ class LoginScreen(MDScreen):
 
         except Exception as e:
             print("Error al verificar estado del mototaxista:", e)
+    
+    def conectar_websocket(self, viaje_id):
+        token = get_headers().get("Authorization").replace("Bearer ", "")
+
+        ws_url = f"ws://127.0.0.1:8000/ws/viaje/{viaje_id}/?token={token}"
+
+        def on_message(ws, message):
+            print("📩 MENSAJE WS:", message)
+
+        def on_open(ws):
+            print("✅ WebSocket conectado")
+
+        def on_close(ws, close_status_code, close_msg):
+            print("❌ WebSocket cerrado")
+
+        def on_error(ws, error):
+            print("⚠️ Error WS:", error)
+
+        self.ws = websocket.WebSocketApp(
+            ws_url,
+            on_message=on_message,
+            on_open=on_open,
+            on_close=on_close,
+            on_error=on_error,
+        )
+
+        hilo = threading.Thread(target=self.ws.run_forever)
+        hilo.daemon = True
+        hilo.start()

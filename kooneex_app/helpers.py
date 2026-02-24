@@ -1,16 +1,13 @@
+from kivy.app import App
+
 def get_headers():
-    try:
-        with open("token.txt", "r") as f:
-            token = f.read().strip()
-        return {"Authorization": f"Bearer {token}"}
-    except:
+    app = App.get_running_app()
+    token = getattr(app, "token", None)
+
+    if not token:
         return {}
 
-def save_headers(access_token):
-    try:
-        with open("token.txt", "w") as f:
-            f.write(access_token)
-        return {"Authorization": f"Bearer {access_token}"}
-    except:
-        return {}
+    return {
+        "Authorization": f"Bearer {token}"
+    }
 
