@@ -18,6 +18,10 @@ Window.size = (360, 640)
 
 
 class KooneexApp(MDApp):
+    token = None
+    viaje_id = None
+    rol = None
+    
     def build(self):
         # Registrar tipografías personalizadas
         LabelBase.register(name="Poppins", fn_regular="fonts/Poppins-Medium.ttf")

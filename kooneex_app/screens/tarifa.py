@@ -1,20 +1,76 @@
 import requests
-from kivymd.uix.screen import MDScreen
+import websocket
+import threading
+import json
+
 from helpers import get_headers
-from kivymd.uix.label import MDLabel
-from kivymd.uix.card import MDCard
-from kivymd.uix.boxlayout import MDBoxLayout
-from kivymd.uix.fitimage import FitImage
-from kivymd.uix.button import MDRaisedButton, MDIconButton
 from config import API_URL
 
+from kivy.app import App
+from kivy.clock import Clock
+from kivymd.uix.screen import MDScreen
+
 class TarifaScreen(MDScreen):
-    viaje_id = None
+    "Pantalla del pasajero esperando o listando las ofertas"
+    def conectar_ws_viaje(self):
+        viaje_id = App.get_running_app().viaje_id
+        ws_url = f"ws://127.0.0.1:8000/ws/viaje/{viaje_id}/"
+        print("🧪 viaje_id:", viaje_id)
+
+        if not viaje_id:
+            print("❌ No hay viaje_id para conectar WS")
+            return
+
+        def on_message(ws, message):
+            data = json.loads(message)
+            tipo = data.get("type")
+
+            if tipo == "nueva_oferta":
+                print("💰 Nueva oferta:", data)
+                Clock.schedule_once(lambda dt: self.cargar_ofertas())
+
+            elif tipo == "oferta_cancelada":
+                print("❌ Oferta cancelada recibida")
+                Clock.schedule_once(lambda dt: self.cargar_ofertas())
+
+        def on_open(ws):
+            print("✅ WS conectado")
+
+        def on_error(ws, error):
+            print("❌ Error WS:", error)
+
+        def on_close(ws, close_status_code, close_msg):
+            print("🔴 WS cerrado")
+
+        self.ws = websocket.WebSocketApp(
+            ws_url,
+            on_open=on_open,
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close
+        )
+
+        hilo = threading.Thread(target=self.ws.run_forever)
+        hilo.daemon = True
+        hilo.start()
+    
+    def on_enter(self):
+        Clock.schedule_once(self.cargar_ofertas, 0)
 
     def on_pre_enter(self):
         self.cargar_ofertas()
+    
+    def on_leave(self):
+        if hasattr(self, "ws"):
+            try:
+                self.ws.close()
+                print("🔌 WS cerrado manualmente")
+            except:
+                pass
 
-    def cargar_ofertas(self):
+            del self.ws
+
+    def cargar_ofertas(self, dt=None):
         rv = self.ids.rv_ofertas
         rv.data = []
 
@@ -48,6 +104,10 @@ class TarifaScreen(MDScreen):
                 return
 
             self.viaje_id = viaje_activo["id"]
+            App.get_running_app().viaje_id = self.viaje_id
+
+            if not hasattr(self, "ws"):
+                self.conectar_ws_viaje()
 
             resp_ofertas = requests.get(f"{API_URL}/ofertas/", headers=headers)
             if resp_ofertas.status_code != 200:
@@ -97,12 +157,11 @@ class TarifaScreen(MDScreen):
 
     
     def eliminar_viaje(self, *args):
+        #Cancelamos la oferta
         if not self.viaje_id:
             return
-
         try:
             headers = get_headers()
-
             resp = requests.delete(
                 f"{API_URL}/viajes/{self.viaje_id}/eliminar/",
                 headers=headers
@@ -111,16 +170,12 @@ class TarifaScreen(MDScreen):
             if resp.status_code in (200, 204):
                 # Limpiar estado local
                 self.viaje_id = None
+                App.get_running_app().viaje_id = None
 
-                # (Opcional) borrar archivo local
-                try:
-                    import os
-                    if os.path.exists("viaje_actual.txt"):
-                        os.remove("viaje_actual.txt")
-                except:
-                    pass
+                if hasattr(self, "ws"):
+                    self.ws.close()
+                    del self.ws
 
-                # 🔁 Volver a la pantalla de solicitud de viaje
                 self.manager.current = "viaje"
 
             else:

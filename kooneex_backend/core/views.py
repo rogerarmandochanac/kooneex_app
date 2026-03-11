@@ -7,7 +7,14 @@ from .serializers import (UsuarioSerializer,
                           UsuarioRegistroSerializer
                         )
 from .permissions import IsAdmin
-from django.db.models import Prefetch, Exists, OuterRef, Case, When, Value, IntegerField
+from django.db.models import (Prefetch, 
+                                Exists, 
+                                OuterRef, 
+                                Case, 
+                                When, 
+                                Value, 
+                                IntegerField
+                                )
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from .models import (Usuario, 
@@ -16,6 +23,8 @@ from .models import (Usuario,
                      Pago, 
                      Oferta
                      )
+
+from django.core.exceptions import ValidationError
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -125,35 +134,6 @@ class MototaxiViewSet(viewsets.ModelViewSet):
         return Response(cercanos)
 
 class ViajeViewSet(viewsets.ModelViewSet):
-
-    def perform_create(self, serializer):
-        viaje = serializer.save(pasajero_id=self.request.user.id)
-
-        channel_layer = get_channel_layer()
-
-        async_to_sync(channel_layer.group_send)(
-            "mototaxistas",
-            {
-                "type": "nuevo_viaje",
-                "data": {
-                    "id": viaje.id,
-                }
-            }
-        )
-
-    def notificar_estado(self, viaje):
-        channel_layer = get_channel_layer()
-
-        async_to_sync(channel_layer.group_send)(
-            f"viaje_{viaje.id}",
-            {
-                "type": "estado_viaje",
-                "estado": viaje.estado,
-                "viaje_id": viaje.id,
-                "mototaxista": viaje.mototaxista.username if viaje.mototaxista else None,
-                "costo_final": float(viaje.costo_final) if viaje.costo_final else None,
-            }
-        )
     
     base_queryset = Viaje.objects.select_related(
         'pasajero', 'mototaxista'
@@ -166,7 +146,8 @@ class ViajeViewSet(viewsets.ModelViewSet):
     ).only(
         'id', 'estado', 'origen_lat', 'origen_lon', 'destino_lat', 'destino_lon',
         'cantidad_pasajeros', 'costo_estimado', 'costo_final','pasajero__username', 
-        'mototaxista__id', 'mototaxista__username', 'referencia', 'distancia_km', 'pasajero__foto'
+        'mototaxista__id', 'mototaxista__username', 'referencia', 'distancia_km', 
+        'pasajero__foto'
     )
     
     queryset = base_queryset
@@ -182,7 +163,8 @@ class ViajeViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         if user.rol == 'pasajero':
-            return self.base_queryset.filter(pasajero=user).exclude(estado='completado').order_by('-distancia_km')
+            return self.base_queryset.filter(
+                pasajero=user).exclude(estado='completado').order_by('-distancia_km')
         
         elif user.rol == 'mototaxista':
             oferta_activa_subquery = Oferta.objects.filter(
@@ -203,6 +185,23 @@ class ViajeViewSet(viewsets.ModelViewSet):
             return queryset.filter(estado='pendiente').order_by('-distancia_km')
         
         return Viaje.objects.none()
+    
+    def perform_create(self, serializer):
+        """Antes de crear el registro enviamos una notificacion"""
+        viaje = serializer.save(pasajero_id=self.request.user.id)
+
+        #SOCKET
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            "mototaxistas",
+            {
+                "type": "nuevo_viaje",
+                "data": {
+                    "id": viaje.id,
+                }
+            }
+        )
+        #SOCKET
     
     @action(detail=False, methods=['get'])
     def estado_viaje_activo(self, request):
@@ -312,10 +311,6 @@ class ViajeViewSet(viewsets.ModelViewSet):
 
         try:
             viaje.aceptar(user)
-
-            #NOTIFICACIÓN TIEMPO REAL
-            self.notificar_estado(viaje)
-
             return Response({
                 "mensaje": "Viaje aceptado correctamente.",
                 "viaje_id": viaje.id
@@ -332,7 +327,6 @@ class ViajeViewSet(viewsets.ModelViewSet):
         viaje = self.get_object()
         user = request.user
 
-        # Seguridad extra (opcional pero recomendado)
         if user != viaje.pasajero and user.rol != 'admin':
             return Response(
                 {"error": "No tienes permiso para eliminar este viaje."},
@@ -341,16 +335,19 @@ class ViajeViewSet(viewsets.ModelViewSet):
 
         try:
             viaje.eliminar()
+
             channel_layer = get_channel_layer()
+
             async_to_sync(channel_layer.group_send)(
                 "mototaxistas",
                 {
-                    "type": "nuevo_viaje",
+                    "type": "cancelar_viaje",
                     "data": {
                         "id": viaje.id,
                     }
                 }
             )
+        
         except ValidationError as e:
             return Response(
                 {"error": e.message},
@@ -402,7 +399,7 @@ class ViajeViewSet(viewsets.ModelViewSet):
             return Response({
                 "mensaje": f"Viaje #{viaje.id} completado correctamente."
             }, status=status.HTTP_200_OK)
-    
+       
 class OfertaViewSet(viewsets.ModelViewSet):
     queryset = Oferta.objects.select_related(
         'viaje', 'mototaxista', 'viaje__pasajero'
@@ -424,7 +421,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
         elif user.rol == "pasajero":
             return self.queryset.filter(viaje__pasajero=user)
         return Oferta.objects.none()
-
+    
     def create(self, request, *args, **kwargs):
         """Sobreescribir create para mejor manejo de errores"""
         serializer = self.get_serializer(data=request.data)
@@ -467,13 +464,27 @@ class OfertaViewSet(viewsets.ModelViewSet):
             )
         
         # Guardar la oferta
-        serializer.save(
+        oferta = serializer.save(
             mototaxista=user,
             viaje=viaje,
             monto=monto,
-            tiempo_estimado=request.data.get('tiempo_estimado', '15-30 min')
         )
-        
+
+        print("📤 Enviando a grupo:", f"viaje_{oferta.viaje.id}")
+
+        # 🔥 Enviar evento por WebSocket
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"viaje_{oferta.viaje.id}",
+            {
+                "type": "nueva_oferta",
+                "data": {
+                    "id": oferta.id,
+                }
+            }
+        )
+         # 🔥 Enviar evento por WebSocket
+
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -507,6 +518,19 @@ class OfertaViewSet(viewsets.ModelViewSet):
             viaje.costo_final = oferta.monto
             viaje.estado = 'aceptado'
             viaje.save()
+
+            # 🔥 Enviar evento por WebSocket
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"viaje_{oferta.viaje.id}",
+                {
+                    "type": "oferta_aceptada",
+                    "data": {
+                        "id": oferta.id,
+                    }
+                }
+            )
+            # 🔥 Enviar evento por WebSocket
             
             # ❌ Rechazar las demás ofertas
             Oferta.objects.filter(viaje=viaje).exclude(pk=oferta.pk).update(aceptada=False)
@@ -526,23 +550,49 @@ class OfertaViewSet(viewsets.ModelViewSet):
                 'estado_viaje': viaje.estado
             }, status=status.HTTP_200_OK)
     
-    @action(detail=True, methods=['delete'])
-    def cancelar_viaje(self, request, pk=None):
-        with transaction.atomic():
-            user = request.user
-            oferta = Oferta.objects.filter(viaje=pk).delete()
-            viaje = Viaje.objects.filter(viaje=pk).delete()
-            return Response({
-                'mensaje': 'Viaje eliminada correctamente.',
-                'viaje_id': pk,
-                'mototaxista': user.username,
-            }, status=status.HTTP_200_OK)
+    # @action(detail=True, methods=['delete'])
+    # def cancelar_viaje(self, request, pk=None):
+    #     with transaction.atomic():
+    #         user = request.user
+    #         oferta = Oferta.objects.filter(viaje=pk).delete()
+    #         viaje = Viaje.objects.filter(viaje=pk).delete()
+    #         #socket
+    #         channel_layer = get_channel_layer()
+    #         async_to_sync(channel_layer.group_send)(
+    #             f"viaje_{pk}",
+    #             {
+    #                 "type": "viaje_cancelado",
+    #                 "data": {
+    #                     "viaje_id": pk,
+    #                     "pasajero": user.username,
+    #                 }
+    #             }
+    #         )
+    #         #socket
+    #         return Response({
+    #             'mensaje': 'Viaje eliminada correctamente.',
+    #             'viaje_id': pk,
+    #             'mototaxista': user.username,
+    #         }, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['delete'])
     def rechazar(self, request, pk=None):
         with transaction.atomic():
             user = request.user
             oferta = Oferta.objects.filter(viaje=pk, mototaxista=user).delete()
+            #socket
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"viaje_{pk}",
+                {
+                    "type": "oferta_cancelada",
+                    "data": {
+                        "oferta_id": pk,
+                        "mototaxista": user.username,
+                    }
+                }
+            )
+            #socket
             return Response({
                 'mensaje': 'Oferta eliminada correctamente.',
                 'oferta_id': pk,

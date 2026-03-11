@@ -22,14 +22,15 @@ class ViajeAceptadoMotoScreen(MDScreen):
                 aceptado = next((v for v in viajes if v["estado"] in ["aceptado", "en_curso"]), None)
 
                 if aceptado:
+                    viaje_id = aceptado["id"]
+                    App.get_running_app().viaje_id = viaje_id
                     self.ids.info_label.text = (
                         f"Oferta Aceptada por el pasajero {aceptado.get('pasajero_nombre')} "
                         f"con una distancia de {aceptado.get('distancia_km', 'N/A')} km.\n"
                         f"Total a cobrar: ${aceptado.get('costo_final', 'N/A')}\n"
                     )
-                    # Guardar el ID del viaje actual en un archivo para referencia rápida
-                    with open("viaje_actual.txt", "w") as f:
-                        f.write(str(aceptado["id"]))
+                    
+                    
                 else:
                     self.ids.info_label.text = "No tienes viajes en curso."
             else:
@@ -57,7 +58,6 @@ class ViajeAceptadoMotoScreen(MDScreen):
             resp = requests.patch(f"{API_URL}/viajes/{viaje_id}/", json=datos, headers=headers)
 
             if resp.status_code in [200, 202]:
-                viaje_screen = self.manager.get_screen("viaje_en_curso_moto")
                 self.manager.current = "viaje_en_curso_moto"
                 
             else:

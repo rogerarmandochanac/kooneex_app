@@ -1,11 +1,17 @@
 import requests
-from kivymd.uix.screen import MDScreen
-from kivy.app import App
-from kivymd.uix.menu import MDDropdownMenu
-from kivy.properties import StringProperty, BooleanProperty
 from helpers import get_headers
-from config import DEFAULT_LAT, DEFAULT_LON, DESTINOS_PREDEFINIDOS, API_URL
+from config import (DEFAULT_LAT, 
+                    DEFAULT_LON, 
+                    DESTINOS_PREDEFINIDOS, 
+                    API_URL
+                    )
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.menu import MDDropdownMenu
+from kivy.app import App
 from kivy.metrics import dp
+from kivy.properties import (StringProperty, 
+                             BooleanProperty
+                             )
 from kivy.utils import platform
 if platform == 'android':
     from plyer import gps
@@ -76,7 +82,6 @@ class ViajeScreen(MDScreen):
     def set_default_location(self):
         print("Usando ubicación por defecto")
         self.manejar_ubicacion(DEFAULT_LAT, DEFAULT_LON)
-
     
     def abrir_lista_destinos(self):
         # Cerrar menú previo si existía

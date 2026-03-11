@@ -1,23 +1,24 @@
 import requests
-from helpers import get_headers
-from kivymd.uix.screen import MDScreen
-from kivymd.uix.label import MDLabel
-from kivymd.uix.card import MDCard
-from kivymd.uix.boxlayout import MDBoxLayout
-from kivy.uix.image import AsyncImage
-from kivymd.uix.textfield import MDTextField
-from kivymd.uix.button import MDRaisedButton, MDIconButton
-from config import API_URL
-from kivymd.uix.fitimage import FitImage
-from kivymd.uix.card import MDCard
-from kivy.properties import StringProperty, NumericProperty
-from kivymd.uix.dialog import MDDialog
-from kivymd.uix.button import MDFlatButton
-from kivy.app import App
-from kivy.clock import Clock
 import websocket
 import threading
 import json
+
+from helpers import get_headers
+
+from kivy.properties import (StringProperty, 
+                            NumericProperty
+                            )
+from kivy.app import App
+from kivy.clock import Clock
+
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.card import MDCard
+from config import API_URL
+from kivymd.uix.card import MDCard
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.button import MDFlatButton
+
+
 
 class PendienteItem(MDCard):
     viaje_id = NumericProperty()
@@ -59,7 +60,12 @@ class PendientesScreen(MDScreen):
 
         def on_message(ws, message):
             data = json.loads(message)
-            print("🚨 Nuevo viaje recibido:", data)
+            tipo = data["type"]
+            if tipo == "nuevo_viaje":
+                print(f"✅ Nuevo viaje recibido:")
+
+            elif tipo == "cancelar_viaje":
+                print("🔥 Viaje cancelado:")
 
             # 🔥 Aquí actualizas tu lista
             Clock.schedule_once(lambda dt: self.cargar_viajes_pendientes())
@@ -79,8 +85,6 @@ class PendientesScreen(MDScreen):
 
     def on_enter(self):
         self.conectar_ws_mototaxi()
-        from kivy.clock import Clock
-        
         Clock.schedule_once(self.cargar_viajes_pendientes, 0)
 
     def cargar_viajes_pendientes(self, dt=None):
@@ -127,6 +131,7 @@ class PendientesScreen(MDScreen):
                 print("✅ Tarifa sugerida correctamente.")
                 screen = self.manager.get_screen("espera_respuesta")
                 screen.viaje_id = viaje_id
+                App.get_running_app().viaje_id = viaje_id
                 self.manager.current = "espera_respuesta"
             else:
                 print("Error al sugerir tarifa:", resp.text)
